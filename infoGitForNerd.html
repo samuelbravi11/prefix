@@ -1,0 +1,111 @@
+<html>
+    <head>
+        <link rel="stylesheet" href="styles.css">
+    </head>
+    <body>
+        
+        <div class="container-box">
+            
+            <div class="box">
+                <div class="header">
+                    <h1>Origin</h1>
+                </div>
+                <div class="testo-git">
+                        Origin è semplicemente il nome del remoto principale.
+                        Quando cloni una repository con:<br>
+                            git clone <url><br>
+                        Git crea automaticamente un remoto chiamato origin,
+                        che punta alla URL da cui hai clonato.<br>
+                        Serve per abbreviare i comandi:<br>
+                        invece di git push https://github.com/...<br>
+                            scrivi git push origin.
+                </div>
+            </div>
+
+            <div class="box">
+                <div class="header">
+                    <h1>Cos’è origin/main o origin/branch</h1>
+                </div>
+                <div class="testo-git">
+                        E' un puntatore in sola lettura che Git mantiene per ricordarsi dove si trovava quel branch sul remoto l’ultima volta che hai fatto fetch/pull.<br>
+                        Rappresenta lo stato del branch remoto al momento dell’ultimo aggiornamento.<br><br>
+                        Tu fai git pull<br>
+                        Git aggiorna origin/main per farlo coincidere con il vero main su GitHub.<br><br>
+                        Tu fai nuovi commit in locale<br>
+                        Main avanza, ma origin/main resta fermo finché non fai git fetch o git push.<br><br>
+                        <h3>Caso particolare: origin/HEAD</h3>
+                        È solo un alias, un puntatore simbolico che indica il branch predefinito del repository remoto.<br>
+                        Di solito origin/HEAD → origin/main.<br>
+                        Serve a Git per sapere quale branch considerare come “default” quando cloni un repository.
+                </div>
+            </div>
+
+            <div class="box">
+                <div class="header">
+                    <h1>A. Crei feature branch partendo da develop</h1>
+                </div>
+                <div class="testo-git">
+                    git checkout develop<br>
+                    git pull<br>
+                    git branch feature/xyz<br>
+                    git checkout feature/xyz<br><br>
+                    <strong>E poi lavori come un negro... (vedi B)</strong><br><br>
+                    <strong>Nota: </strong>quando faccio checkout develop e poi git pull lui in automatico esegue:<br>
+                    git pull origin develop<br>
+                    Lo stesso discorso vale per il main.<br><br>
+                    <strong>Perché succede? </strong>Ogni branch locale ha un suo “upstream branch”, cioè il branch remoto a cui è collegato (in questo caso origin/main o origin/develop).<br>
+                    Lo vedi con:<br>
+                    git branch -vv<br><br>
+                    <strong>Come collegare il branch locale al branch remoto: </strong>git branch --set-upstream-to=origin/nome-branch<br>
+                </div>
+            </div>
+
+            <div class="box">
+                <div class="header">
+                    <h1>B. Lavorare come SamuelBravi</h1>
+                </div>
+                <div class="testo-git">
+                    Una volta che hai creato il tuo branch e ti sei spostato su di esso (git checkout feature/xyz), puoi iniziare a lavorare.<br>
+                    <ul>
+                        <li>Aggiungere file: git add file1 file2 ... filen</li><br>
+                        <li>Fare commit regolarmente per salvare: git commit -m "Descrizione delle modifiche"</li><br>
+                        <li>Quando una funzionalità è pronta, fai il merge su develop: git merge develop</li><br>
+                        <li>Ora sei pronto per pushare il tuo develop (ricordati che stai lasciando indietro il main apposta come versione stabile): git push origin develop</li><br>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="box">
+                <div class="header">
+                    <h1>C. Quando vuoi fare una release</h1>
+                </div>
+                <div class="testo-git">
+                    Una volta che develop è stabile <strong>(quindi dopo aver pushato il develop sul remoto)</strong>:<br>
+                    <h4>Vai su master</h4>
+                    <ul>
+                        <li>git checkout master</li><br>
+                        <li>git pull</li><br>
+                        <li>git merge develop</li><br>
+                        <li>git push origin main</li><br>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="box nota">
+                <div class="header">
+                    <h1>Nota per Sam: tenere sincronizzati main e develop</h1>
+                </div>
+                <div class="testo-git">
+                    Quando main avanza (es. hotfix urgente), porti la modifica su develop:<br>
+                    <h4>Vai su master</h4>
+                    <ul>
+                        <li>git checkout develop</li><br>
+                        <li>git pull</li><br>
+                        <li>git merge main</li><br>
+                        <li>git push origin develop</li><br>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
