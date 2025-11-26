@@ -1,30 +1,24 @@
 openapi: 3.0.0
 info:
   version: '1'
-  title: "EasyLib OpenAPI 3.0"
-  description: API for managing book lendings.
+  title: "PreFix OpenAPI 3.0"
+  description: API for managing the maintenance of municipal buildings.
   license:
     name: MIT
 servers:
   - url: http://localhost:8000/api/v1
     description: Localhost
 paths:
-  /students:
+  /central_admins:
     post:
       description: >-
-        Creates a new student in the system.
-      summary: Register a new student
+        Creates a new central admin in the system.
+      summary: Register a new central admin
       requestBody:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - email
-              properties:
-                email:
-                  type: string
-                  description: 'Email address of the student'
+              $ref: '#/components/schemas/User'
       responses:
         '201':
           description: 'User created. Link in the Location header'
@@ -32,48 +26,134 @@ paths:
             'Location':
               schema:
                 type: string
-              description: Link to the newly created student.
+              description: Link to the newly created central admin.
 
-  /books:
+  /local_admins:
+    post:
+      description: >-
+        Creates a new local admin in the system.
+      summary: Register a new local admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+      responses:
+        '201':
+          description: 'User created. Link in the Location header'
+          headers:
+            'Location':
+              schema:
+                type: string
+              description: Link to the newly created local admin.
+
+  /companies:
+    post:
+      description: >-
+        Creates a new companies in the system.
+      summary: Register a new companies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+      responses:
+        '201':
+          description: 'User created. Link in the Location header'
+          headers:
+            'Location':
+              schema:
+                type: string
+              description: Link to the newly created companies.
+ 
+  /municipal_buildings:
+    post:
+      description: >-
+        Creates a new municipal building in the system.
+      summary: Register a new municipal building
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - building_name
+                - supervisor_email
+              properties:
+                building_name:
+                  type: string
+                  description: 'Name of the municipal building'
+                supervisor_email: 
+                  type: string
+                  description: 'Supervisor`s email address that manages the building'
+      responses:
+        '201':
+          description: 'Building created. Link in the Location header'
+          headers:
+            'Location':
+              schema:
+                type: string
+              description: Link to the newly created companies.
     get:
       description: >-
-        Gets the list of books.
-      summary: View all books
+        Gets the list of municipal buildings.
+      summary: View all municipal buildings
       responses:
         '200':
-          description: 'Collection of books'
+          description: 'Collection of municipal building'
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Book'
-  /booklendings:
+                  $ref: '#/components/schemas/MunicipalBuildings'
+
+  /building_goods:
     post:
       description: >-
-        Creates a new booklending.
-      summary: Borrow a book
-      responses:
-        '201':
-          description: 'Booklending created. Link in the Location header'
-          headers:
-            'Location':
-              schema:
-                type: string
-              description: Link to the newly created booklending.
+        Creates a new asset of the building.
+      summary: Add an asset of the building
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Booklending'
-          
+              $ref: '#/components/schemas/BuildingGoods'
+      responses:
+        '201':
+          description: 'Asset created. Link in the Location header'
+          headers:
+            'Location':
+              schema:
+                type: string
+              description: Link to the newly created asset.
+      
+  /maintenance_rules:
+    post:
+      description: >-
+        Creates a new rule for the maintenance of a specific asset.
+      summary: Add a new rule
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaintenanceRules'
+      responses:
+        '201':
+          description: 'Rule created. Link in the Location header'
+          headers:
+            'Location':
+              schema:
+                type: string
+              description: Link to the newly created rule.
+       
 components:
   schemas:
-    Student:
+    User:
       type: object
       required:
         - id
         - email
+        - status
       properties:
         id:
           type: integer
@@ -81,36 +161,89 @@ components:
         email:
           type: string
           description: 'Email address of the user'
-    Book:
-      type: object
-      required:
-        - title
-        - author
-        - ISBN
-        - status
-      properties:
-        title:
-          type: string
-          description: 'Title of the book'
-        deadline:
-          type: string
-          description: 'Author of the book'
-        ISBN:
-          type: string
-          description: 'ISBN of the book'
         status:
           type: string
-          enum: [available, lended]
-          description: 'Tells whether the book is currently available or not'
-    Booklending:
+          enum: [pending, accepted]
+          description: 'Tells if the user is certificate to use the webapp or not'
+
+    MunicipalBuildings:
       type: object
       required:
-      - student
-      - book
+        - building_name
+        - building_address
+        - supervisor_email
+        - supervisor_name
+        - supervisor_surname
       properties:
-        user:
+        building_name:
           type: string
-          description: 'Link to the user'
-        book:
+          description: 'Name of the building'
+        building_address:
+          type: string
+          description: 'Address of the building'
+        supervisor_email:
+          type: string
+          description: 'Email of the supervisor of the building'
+        supervisor_name:
+          type: string
+          description: 'Name of the supervisor of the building'
+        supervisor_username:
+          type: string
+          description: 'Username of the supervisor of the building'
+       
+    BuildingGoods:
+      type: object
+      required:
+      - asset_name
+      - asset_category
+      - manufacturer_code
+      - unique_serial_number
+      - ubification
+      properties:
+        asset_name:
+          type: string
+          description: 'Name of the asset'
+        asset_category:
           type: integer
-          description: 'Link to the book'
+          description: 'Category of the asset'
+        manufacturer_code:
+          type: string
+          description: 'Code of the manufacturer'
+        unique_serial_number:
+          type: integer
+          description: 'Just a unique serial number'
+        ubification:
+          type: integer
+          description: 'Just a ubification'
+	 
+    MaintenanceRules:
+      type: object
+      required:
+      - rule_name
+      - rule_description
+      - category_affected_asset
+      - time_unity
+      - frequency
+      - priority
+      properties:
+        rule_name:
+          type: string
+          description: 'Name of the rule'
+        rule_description:
+          type: integer
+          description: 'Description of the rule'
+        category_affected_asset:
+          type: string
+          enum: [opzione1, opzione2, ecc]
+          description: 'Category of the affected asset'
+        time_unity:
+          type: string
+          enum: [weeks, months, years]
+          description: 'Maintenance periodicity'
+        frequency:
+          type: integer
+          description: 'Indicates the number of repetitions of the time unity'
+        priority:
+          type: string
+          enum: [low, medium, high]
+          description: 'Indicate the priority of a rule'
