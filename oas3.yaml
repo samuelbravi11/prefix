@@ -169,6 +169,30 @@ paths:
             application/json:
               schema:
                 type: integer
+
+  /LineGraph/distinct_maintenance_intervention:
+    get:
+      description: >-
+        Return the different type of intervantion
+      responses:
+        '200':
+          description: 'Collection of Intervention type'
+          content:
+            application/json:
+              schema:
+                type: array
+
+  /LineGraph/count_maintenance_intervention:
+    get:
+      description: >-
+        Return the total number of all the intervantion 
+      responses:
+        '200':
+          description: 'Return the number of intervantion'
+          content:
+            application/json:
+              schema:
+                type: integer
                 
 components:
   schemas:
