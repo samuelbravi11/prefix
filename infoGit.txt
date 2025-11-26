@@ -7,7 +7,7 @@ Se roba grossa: (user story)
     git commit -m "descrizione-commit"
     git checkout develop
     git merge nome-branch
-    git push
+    git push origin develop
 
 Se roba piccola: (es. yaml)
   prima:
@@ -17,10 +17,13 @@ Se roba piccola: (es. yaml)
     git commit -m "descrizione-commit"
     git checkout master
     git merge develop
-    git push 
+    git push origin master
+    git push origin develop
 
 
 Quando tutto è funzionante:
   post lavoro:
     git checkout master
     git merge develop
+    git push origin master
+    git push origin develop
