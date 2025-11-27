@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Required meta tags -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <link href="https://fonts.googleapis.com/css?family=Roboto:300,400&display=swap" rel="stylesheet">
+
+  <link href="https://fonts.googleapis.com/css2?family=Reem+Kufi:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Style -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="../styleBootstrap.css">
+
+  <title>Login</title>
+</head>
+
+<body>
+
+
+  <div class="d-lg-flex half">
+    <div class="bg order-1 order-md-2 w-25 position-relative"
+      style="background-image: url('../images/bg_1.jpg'); background-size: cover; background-position: center;">
+      <div class="overlay-text"
+        style="position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%); color: white; text-align: center;">
+        <h1 class="display-1" class="font-family: 'Reem Kufi', sans-serif;">PreFix</h1>
+      </div>
+      <div class="overlay-text"
+        style="position: absolute; top: 80%; left: 50%; transform: translate(-50%, -50%); color: white; text-align: center;">
+        <h3 style="font-family: 'Reem Kufi', sans-serif;">PreFix</h3>
+          <p>Strumento di manutenzione predittiva comunale</p>
+      </div>
+    </div>
+    <div class="contents order-2 order-md-1 w-75">
+      <div class="d-flex justify-content-between align-items-center p-3 text-black">
+        <div>
+          <img src="../images/logo.png" class="me-2" style="height: 30px;">
+          <span class="site-title me-0">Pre-Fix</span>
+        </div>
+
+        <div>
+          <a href="registrati"> no account yet? </a>
+        </div>
+      </div>
+      <div class="container">
+
+        <div class="row align-items-center justify-content-center">
+          <div class="col-md-6">
+            <div class="mb-4">
+              <h3 class="row align-items-center justify-content-center">Account Log In</h3>
+              <p class="mb-4 row align-items-center justify-content-center">Please log in to continue to your account
+              </p>
+            </div>
+            <form action="#" method="post">
+              <div class="form-group first">
+                <label for="username">Username</label>
+                <input type="text" class="form-control" id="username">
+
+              </div>
+              <div class="form-group first">
+                <label for="password">Password</label>
+                <input type="password" class="form-control" id="password">
+
+              </div>
+              <div class="form-group last mb-3">
+                <label for="OTP">OTP</label>
+                <input type="OTP" class="form-control" id="OTP">
+
+              </div>
+
+              
+
+              <input type="submit" value="Log In" class="btn btn-block btn-primary">
+
+              <span class="d-block text-center my-4 text-muted">&mdash; or &mdash;</span>
+
+              <div class="social-login">
+                <input type="submit" value="Accesso con SPID" class="btn btn-block btn-primary">
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+  </div>
+
+
+
+  <script src="js/jquery-3.3.1.min.js"></script>
+  <script src="js/popper.min.js"></script>
+  <script src="js/bootstrap.min.js"></script>
+  <script src="js/main.js"></script>
+</body>
+
+<style>
+/* 1. Rimuove i margini di default del browser */
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* 2. Impedisce che il wrapper superi l'altezza della finestra */
+.half {
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+/* 3. Forza la colonna con background a stare esattamente nello schermo */
+.bg {
+  height: 100vh;
+}
+
+/* 4. Rimuove il padding verticale del container Bootstrap che crea overflow */
+.container {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.contents .container {
+  transform: translateY(-50px);
+}
+</style>
+
+</html>
