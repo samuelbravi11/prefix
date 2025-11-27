@@ -1,27 +1,16 @@
 body {
   background-color: #f0f0f0;
-<<<<<<< HEAD
-=======
   font-family: Arial, sans-serif;
->>>>>>> ba493ccfe4c7d0b397a2fa9bcf8c74e8a7d30313
 }
 
 .container {
   display: flex;
   gap: 20px;
   border-radius: 5px;
-<<<<<<< HEAD
-
-}
-
-.box {
-  padding: 30px;
-=======
 }
 
 .box {
   padding: 40px;
->>>>>>> ba493ccfe4c7d0b397a2fa9bcf8c74e8a7d30313
   margin: 20px;
   background-color: white;
   border-radius: 10px;
@@ -33,10 +22,6 @@ body {
   line-height: 1.2;
 }
 
-<<<<<<< HEAD
-
-=======
->>>>>>> ba493ccfe4c7d0b397a2fa9bcf8c74e8a7d30313
 .nota {
   background-color: #d153be;
   border: 0px solid #ff0000;

@@ -1,5 +1,9 @@
 # -----------PROGETTO-----------
-form/
+# 1. Nega l'ignoramento della cartella "form" (Git ha bisogno di vedere la cartella per vedere il file dentro)
+!/form/
+
+# 2. Nega l'ignoramento del file specifico all'interno della cartella "form"
+/form/input.txt
 
 # -----------NODE-----------
 # Logs
