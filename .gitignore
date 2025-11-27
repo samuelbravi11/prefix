@@ -12,6 +12,8 @@ form/scss/
 # Ma fai un'eccezione (nega l'ignoramento) per questo file specifico
 !form/login.txt
 
+.DS_Store
+
 # -----------NODE-----------
 # Logs
 logs
