@@ -1,9 +1,16 @@
 # -----------PROGETTO-----------
-# 1. Nega l'ignoramento della cartella "form" (Git ha bisogno di vedere la cartella per vedere il file dentro)
-!/form/
+# Ignora tutto il contenuto all'interno della cartella form/
+form/*
 
-# 2. Nega l'ignoramento del file specifico all'interno della cartella "form"
-/form/input.txt
+form/.DS_Store
+form/css/
+form/fonts/
+form/images/
+form/js/
+form/scss/
+
+# Ma fai un'eccezione (nega l'ignoramento) per questo file specifico
+!form/login.txt
 
 # -----------NODE-----------
 # Logs
