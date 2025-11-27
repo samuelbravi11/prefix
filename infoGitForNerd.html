@@ -130,11 +130,11 @@
 
             <div class="box nota">
                 <div class="header">
-                    <h1>Nota per Sam: tenere sincronizzati master e develop</h1>
+                    <h1>Note</h1>
                 </div>
                 <div class="testo-git">
+                    <h4>Tenere sincronizzati master e develop</h4>
                     Quando master avanza (es. hotfix urgente), porti la modifica su develop:<br>
-                    <h4>Vai su master</h4>
                     <ul>
                         <li>git checkout develop</li><br>
                         <li>git pull</li><br>
@@ -157,6 +157,10 @@
                     git reset --hard hash-commit: Sposta il branch attuale su quel commit. Tutti i commit che non avranno più riferimenti verranno rimossi automaticamente da Git (garbage collection).<br>
                     <h4>Per aggiornare la storia anche sul remoto</h4>
                     git push --force: Aggiorna solo il branch remoto dove sei. Se vuoi aggiornare anche l'altro branch ripeti le stesse operazioni.<br>
+                    <h4>Merge a 3 vie</h4>
+                    git merge --no-ff nome-branch: Crea sempre un commit di merge, anche se il merge poteva essere fatto con un fast-forward. Utile per mantenere traccia dei merge.<br>
+                    <h4>Visualizzare i branch locali con il loro grafico</h4>
+                    git log --oneline --graph --all --decorate: Mostra un grafico compatto della storia dei commit, includendo tutti i branch e i riferimenti.<br>
                 </div>
             </div>
         </div>
