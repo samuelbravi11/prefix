@@ -1,6 +1,29 @@
 body {
-  background-color: powderblue;
+  background-color: #f0f0f0;
+  font-family: Arial, sans-serif;
 }
-h1 {
-  color: blue;
+
+.container {
+  display: flex;
+  gap: 20px;
+  border-radius: 5px;
+}
+
+.box {
+  padding: 40px;
+  margin: 20px;
+  background-color: white;
+  border-radius: 10px;
+}
+
+.testo-git {
+  font-size: 16px;
+  text-align: justify;
+  line-height: 1.2;
+}
+
+.nota {
+  background-color: #d153be;
+  border: 0px solid #ff0000;
+  opacity: 70%;
 }
