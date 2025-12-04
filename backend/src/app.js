@@ -4,11 +4,7 @@ const userRoutes = require('./routes/userRoutes');
 const app = express();
 
 
-app.use(cors({
-  origin: "http://localhost:3000", // o "*" se vuoi permettere tutti
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true, // se vuoi inviare cookie o auth headers
-}));
+app.use(cors());
 
 
 app.use(express.json());
