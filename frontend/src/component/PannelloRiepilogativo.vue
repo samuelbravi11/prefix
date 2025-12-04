@@ -1,5 +1,5 @@
 <template>
-  <div class="card shadow-sm border-0 w-100 pannello-riepilogo">
+  <div class="card shadow-sm border-0 w-100">
     
     <!-- Titolo -->
     <div class="card-body ps-5">
