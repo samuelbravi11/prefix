@@ -1,22 +1,21 @@
 <template>
-  <div class="d-flex vh-100">
+  <div class="d-flex min-vh-100">
     <Sidebar />
 
     <div class="flex-grow-1 bg-light">
       <Navbar />
 
-      <div class="container mt-4">
-        <h2>SEEEEEEE</h2>
+      <div class="container-fluid mt-4">
 
-        <div class="row mt-4">
-          <div class="col-md-4">
-            <pannelloRiepigolativo/>
+        <div class="row mt-4 justify-content-center align-items-center">
+          <div class="col-11 mb-4">
+            <PannelloRiepigolativo/>
           </div>
-          <div class="col-md-4">
-            <graficoLinee/>
+          <div class="col-12 mb-4">
+            <GraficoLinee/>
           </div>
-          <div class="col-md-4">
-            <graficoTorta/>
+          <div class="col-12 mb-4">
+            <GraficoTorta/>
           </div>
         </div>
       </div>
@@ -27,7 +26,7 @@
 <script setup>
 import Sidebar from '../component/Sidebar.vue'
 import Navbar from '../component/Navbar.vue'
-import pannelloRiepigolativo from '../component/pannelloRiepigolativo.vue'
-import graficoLinee from '../component/graficoLinee.vue'
-import graficoTorta from '../component/graficoTorta.vue'
+import PannelloRiepigolativo from '../component/PannelloRiepilogativo.vue'
+import GraficoLinee from '../component/GraficoLinee.vue'
+import GraficoTorta from '../component/GraficoTorta.vue'
 </script>
