@@ -1,22 +1,24 @@
-require("dotenv").config({ path: __dirname + "/../.env" });
-const connectDB = require("./config/db");
-const express = require("express");
-const mongoose = require("mongoose");
+import dotenv from "dotenv";
+import mongoose from "mongoose";
+import connectDB from "./config/db.js";
 
-const app = require("./app");
+import app from "./app.js";
+
+// Carica variabili ambiente
+dotenv.config({ path: new URL("../.env", import.meta.url).pathname });
 
 // Funzione per stampare tutte le collection, anche vuote
 const listAllCollections = async () => {
     try {
-        const db = mongoose.connection.db; // usa la connessione di Mongoose
+        const db = mongoose.connection.db;
         const collections = await db.listCollections({}, { nameOnly: true }).toArray();
 
         console.log("Collezioni nel DB:");
+
         if (collections.length === 0) {
             console.log("Nessuna collection trovata");
         } else {
             for (const col of collections) {
-                // Recupera anche il numero di documenti nella collection
                 const count = await db.collection(col.name).countDocuments();
                 console.log(`- ${col.name} (Documenti: ${count})`);
             }
@@ -35,6 +37,7 @@ const startServer = async () => {
         await listAllCollections();
 
         const PORT = process.env.PORT || 3000;
+
         app.listen(PORT, () => {
             console.log(`Server avviato su http://localhost:${PORT}`);
             console.log(`DB in uso: ${process.env.DB_NAME}`);

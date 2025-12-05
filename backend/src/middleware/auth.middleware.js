@@ -1,4 +1,4 @@
-const { verifyAccessToken } = require("../services/token.service.js");
+import { verifyAccessToken } from "../services/token.service.js";
 
 function requireAuth(req, res, next) {
   try {
@@ -18,4 +18,4 @@ function requireAuth(req, res, next) {
   }
 }
 
-module.exports = requireAuth;
+export default requireAuth;
