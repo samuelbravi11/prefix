@@ -4,5 +4,8 @@ import './assets/main.scss'
 import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
+import { setupAxiosRefresh } from "./api/tokenService"
 
-createApp(App).use(router).mount('#app')
+setupAxiosRefresh();
+
+createApp(App).use(router).mount('#app');

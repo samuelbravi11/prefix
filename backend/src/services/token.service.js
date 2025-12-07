@@ -1,21 +1,73 @@
-import jwt from "jsonwebtoken";
+import { SignJWT, jwtVerify } from "jose";
 
-const JWT_SECRET = process.env.JWT_SECRET;
-const ACCESS_EXP = process.env.ACCESS_EXP;
-const REFRESH_EXP = process.env.REFRESH_EXP;
-
-export function generateAccessToken(payload) {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: ACCESS_EXP });
+// --- VALIDAZIONE ENV ---
+if (!process.env.JWT_SECRET) {
+  throw new Error("Missing env: JWT_SECRET");
 }
 
-export function generateRefreshToken(payload) {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: REFRESH_EXP });
+if (!process.env.ACCESS_EXP) {
+  throw new Error("Missing env: ACCESS_EXP");
 }
 
-export function verifyAccessToken(token) {
-  return jwt.verify(token, JWT_SECRET);
+if (!process.env.REFRESH_EXP) {
+  throw new Error("Missing env: REFRESH_EXP");
 }
 
-export function verifyRefreshToken(token) {
-  return jwt.verify(token, JWT_SECRET);
+const encoder = new TextEncoder();
+const key = encoder.encode(process.env.JWT_SECRET);
+
+
+
+// GENERA ACCESS TOKEN --> Serve per autenticare le richieste API, quindi per accedere alla dashboard e risorse protette
+// breve durata (es. 15 minuti)
+// a differenza del refresh token, ha validità breve ma posso usarlo quante volte voglio
+// quando scade, uso il refresh token per ottenerne uno nuovo richiamando la route POST /auth/refresh --> l'endpoint verifica la firma del refresh token e fingerprint (diverso da login)
+export async function generateAccessToken(payload) {
+  return await new SignJWT(payload)
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(process.env.ACCESS_EXP)
+    .sign(key);
+}
+
+export async function verifyAccessToken(token) {
+  try {
+    const { payload } = await jwtVerify(token, key);
+    return payload;
+  } catch (err) {
+    throw new Error("Access token invalido o scaduto");
+  }
+}
+
+// GENERA REFRESH TOKEN --> Serve per ottenere nuovi access token senza rifare login, mandando il refresh token al server
+// lunga durata (es. 7 giorni)
+// invio il refresh token UNICAMENTE alla route: POST /auth/refresh e ricevo in cambio un access token fresco
+// per evitare furti di refresh token, ad ogni refresh ne genero uno nuovo (rotazione) e invalido il precedente sostituendolo nel DB
+// nel DB non salvo mai il token in chiaro ma solo (l'hash + uso fingerprint) per legarlo al device --> ottengo una sessione utente legata ad un device specifico
+// ogni dispositivo → fingerprint diversa → genera refresh token diverso → tutti validi
+export async function generateRefreshToken(payload) {
+  return await new SignJWT(payload)
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(process.env.REFRESH_EXP)
+    .sign(key);
+}
+
+export async function verifyRefreshToken(token) {
+  try {
+    const { payload } = await jwtVerify(token, key);
+    return payload;
+  } catch (err) {
+    throw new Error("Refresh token invalido o scaduto");
+  }
+}
+
+// DEBUG — decodifica senza verificare la firma
+export async function decodeToken(token) {
+  try {
+    const { payload } = await jwtVerify(token, key);
+    return payload;
+  } catch {
+    return null;
+  }
 }
