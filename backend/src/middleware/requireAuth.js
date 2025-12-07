@@ -1,6 +1,8 @@
+// src/middlewares/requireAuth.js
+
 import { verifyAccessToken } from "../services/token.service.js";
 
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   try {
     const header = req.headers.authorization;
 
@@ -9,11 +11,14 @@ function requireAuth(req, res, next) {
     }
 
     const token = header.split(" ")[1];
-    const payload = verifyAccessToken(token);
+
+    // Decripta + validazione JWE
+    const payload = await verifyAccessToken(token);
 
     req.user = payload;
-    next();
+    return next();
   } catch (error) {
+    console.error("ERRORE AUTH:", error);
     return res.status(401).json({ message: "Token invalido o scaduto" });
   }
 }

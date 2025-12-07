@@ -1,12 +1,12 @@
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import connectDB from "./config/db.js";
-
 import app from "./app.js";
 
-// Carica variabili ambiente
+// Carica variabili ambiente --> salvate in memoria ram per tutta l'esecuzione del server
 dotenv.config({ path: new URL("../.env", import.meta.url).pathname });
 
+/*
 // Funzione per stampare tutte le collection, anche vuote
 const listAllCollections = async () => {
     try {
@@ -27,14 +27,17 @@ const listAllCollections = async () => {
         console.error("Errore nel recupero delle collection:", err);
     }
 };
+*/
 
-const startServer = async () => {
+async function startServer() {
     try {
-        // Connessione al database
-        await connectDB();
+        // Connessione Mongo
+        const connection = await connectDB();
+        console.log("Stato connessione:", connection.readyState);
 
-        // Mostra tutte le collection
-        await listAllCollections();
+        // elenco le collections
+        const collections = await connection.db.listCollections().toArray();
+        console.log("Collections esistenti:", collections.map(c => c.name));
 
         const PORT = process.env.PORT || 3000;
 
@@ -46,6 +49,6 @@ const startServer = async () => {
         console.error("Errore durante l'avvio del server:", error);
         process.exit(1);
     }
-};
+}
 
 startServer();

@@ -1,10 +1,11 @@
 <template>
   <div class="container-fluid vh-100">
     <div class="row h-100">
-      <!-- Colonna sinistra: Login -->
 
+      <!-- Colonna sinistra -->
       <div class="col-md-9 d-flex flex-column vh-100">
-        <!-- Navbar in cima -->
+
+        <!-- Navbar -->
         <nav class="navbar navbar-expand-lg navbar-light w-100">
           <div class="container-fluid">
             <div>
@@ -13,51 +14,61 @@
             </div>
             <div class="d-flex">
               <p class="mt-3">
-                Non hai un account?
-                <router-link to="/register">Registrati</router-link>
+                Hai già un account?
+                <router-link to="/">Accedi</router-link>
               </p>
             </div>
           </div>
         </nav>
 
-        <!-- Login form -->
+        <!-- Form Registrazione -->
         <div class="d-flex justify-content-center align-items-center flex-grow-1">
           <div class="custom-width text-center">
-            <h2 class="mb-4">Account Login</h2>
-            <p class="mb-4">Please log in to continue to your account</p>
-            <form @submit.prevent="login">
+            <h2 class="mb-4">Registrazione account</h2>
+            <p class="mb-4">Crea un account per iniziare</p>
+
+            <form @submit.prevent="doRegister">
+              
               <div class="mb-3">
-                <input type="text" v-model="email" class="form-control" placeholder="Email" />
+                <input type="text" v-model="name" class="form-control" placeholder="Nome" />
               </div>
+
+              <div class="mb-3">
+                <input type="email" v-model="email" class="form-control" placeholder="Email" />
+              </div>
+
               <div class="mb-3">
                 <input type="password" v-model="password" class="form-control" placeholder="Password" />
               </div>
+
               <button type="submit" class="btn btn-primary w-100">
-                Log In
+                Registrati
               </button>
             </form>
           </div>
         </div>
       </div>
 
-      <!-- Colonna destra: Immagine -->
-      <div class="col-md-3 d-none d-md-block p-0 position-relative" :style="{
-        backgroundImage: `url(${bgImage})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        height: '100vh',
-      }">
-        <!-- Scritta in alto 30% -->
+      <!-- Colonna destra immagine -->
+      <div
+        class="col-md-3 d-none d-md-block p-0 position-relative"
+        :style="{
+          backgroundImage: `url(${bgImage})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          height: '100vh',
+        }"
+      >
         <div class="position-absolute start-50 translate-middle-x text-center text-white" style="top: 30%">
           <h1 class="display-1">PreFix</h1>
         </div>
 
-        <!-- Scritta in basso 80% -->
         <div class="position-absolute start-50 translate-middle-x text-center text-white" style="top: 80%">
           <p>Strumento di manutenzione predittiva comunale</p>
         </div>
       </div>
+
     </div>
   </div>
 </template>
@@ -66,43 +77,47 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import bgImage from "../assets/images/login_image.jpg";
-import { login as loginService } from "../api/authService.js"; //importa funzione login
+import { register as registerService } from "../api/authService.js";
 
 const email = ref("");
 const password = ref("");
+const name = ref("");
 const router = useRouter();
 
-async function login() {
-  if (!email.value || !password.value) {
-    alert("Inserisci email e password");
+async function doRegister() {
+  if (!email.value || !password.value || !name.value) {
+    alert("Compila tutti i campi");
     return;
   }
 
   try {
-    const response = await loginService(email.value, password.value);
+    const response = await registerService(email.value, password.value, name.value);
 
-    const token = response.data.accessToken;
-    localStorage.setItem("authToken", token);
+    // token presente → accedi direttamente
+    if (response.data?.accessToken) {
+      localStorage.setItem("authToken", response.data.accessToken);
+      router.push("/dashboard");
+    } else {
+      alert("Registrazione avvenuta, ora accedi");
+      router.push("/");
+    }
 
-    router.push("/dashboard");
   } catch (error) {
-    alert("Email o password errati");
     console.error(error);
+    alert("Errore durante la registrazione");
   }
 }
 </script>
 
 
+
 <style scoped>
-/* Assicura che l'immagine copra tutta la colonna */
 .object-fit-cover {
   object-fit: cover;
 }
 
 .custom-width {
   width: 400px;
-  /* larghezza fissa */
   margin: 0 auto;
-  /* centrato orizzontalmente */
 }
 </style>

@@ -10,21 +10,24 @@ const __dirname = path.dirname(__filename);
 // Carica il file .env
 dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
-const connectDB = async () => {
+
+export async function connectDB() {
   try {
     console.log("--- DEBUG CONNESSIONE ---");
     console.log("URI:", process.env.MONGO_URI);
     console.log("DB NAME:", process.env.DB_NAME);
 
     await mongoose.connect(process.env.MONGO_URI, {
-      dbName: process.env.DB_NAME,
+      dbName: "PreFix"
     });
 
-    console.log(`Database connesso con successo a: ${mongoose.connection.name}`);
+    console.log("Connesso su MONGODB:", mongoose.connection.name);
+    return mongoose.connection;
+
   } catch (err) {
-    console.error("Errore di connessione al database:", err);
+    console.error("Errore connessione Mongo:", err);
     process.exit(1);
   }
-};
+}
 
 export default connectDB;
