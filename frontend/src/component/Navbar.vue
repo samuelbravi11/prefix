@@ -1,5 +1,5 @@
 <template>
-  <nav class="navbar navbar-light bg-white px-4 shadow py-4">
+  <nav class="navbar navbar-light bg-white px-4 shadow py-4 overflow-hidden flex-shrink-0">
     <div class="container-fluid">
       <span class="navbar-brand mb-0 h5">Dashboard</span>
       <div class="d-flex align-items-center gap-3">

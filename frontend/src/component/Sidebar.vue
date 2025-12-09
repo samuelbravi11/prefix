@@ -1,8 +1,8 @@
 <template>
-    <div class="d-flex flex-column vh-100 text-white" style="width: 240px; background-color: #1F263E;">
+    <div class="d-flex flex-column vh-100 text-white overflow-auto" style="width: 240px; background-color: #1F263E;">
 
         <!-- Contenitore principale con flex-grow per spingere il pulsante in basso -->
-        <div class="flex-grow-1 d-flex flex-column">
+        <div class="flex-grow-1 d-flex flex-column ">
 
             <!-- Barra vuota all'altezza della navbar -->
             <nav class="navbar p-0 mb-3 py-4 d-flex justify-content-center align-items-center"
