@@ -41,22 +41,8 @@
       </div>
 
       <!-- Colonna destra: Immagine -->
-      <div class="col-md-3 d-none d-md-block p-0 position-relative" :style="{
-        backgroundImage: `url(${bgImage})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        height: '100vh',
-      }">
-        <!-- Scritta in alto 30% -->
-        <div class="position-absolute start-50 translate-middle-x text-center text-white" style="top: 30%">
-          <h1 class="display-1">PreFix</h1>
-        </div>
-
-        <!-- Scritta in basso 80% -->
-        <div class="position-absolute start-50 translate-middle-x text-center text-white" style="top: 80%">
-          <p>Strumento di manutenzione predittiva comunale</p>
-        </div>
+      <div class="col-md-3 d-none d-md-block p-0" style="height:100vh; background-color:#1F263E;">
+        <img :src="bgImage" class="w-100 h-100" style="object-fit: contain; object-position:center;">
       </div>
     </div>
   </div>
@@ -93,16 +79,4 @@ async function login() {
 </script>
 
 
-<style scoped>
-/* Assicura che l'immagine copra tutta la colonna */
-.object-fit-cover {
-  object-fit: cover;
-}
-
-.custom-width {
-  width: 400px;
-  /* larghezza fissa */
-  margin: 0 auto;
-  /* centrato orizzontalmente */
-}
-</style>
+<style scoped></style>

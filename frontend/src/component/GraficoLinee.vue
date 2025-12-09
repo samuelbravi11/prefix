@@ -14,7 +14,7 @@
     <div class="card-body ps-5">
       <SelezioneMesi :selected="selectedPeriod" @periodSelected="changePeriod" />
 
-      <!-- Grafico -->
+      <!-- Grafico Linee -->
       <v-chart :option="chartOptions" autoresize class="w-100" style="height: 500px;" />
     </div>
   </div>
@@ -44,13 +44,13 @@ const chartOptions = ref(generateChartData(selectedPeriod.value))
 function generateChartData(period) {
   let data, title
   if (period === 'mese') {
-    title = 'Vendite Ultimo Mese'
+    title = 'Vendite - Ultimo Mese'
     data = [10, 20, 15, 30, 25, 18, 10, 20, 15, 30, 25, 18]
   } else if (period === 'trimestre') {
-    title = 'Vendite Ultimo Trimestre'
+    title = 'Vendite - Ultimo Trimestre'
     data = [120, 200, 150, 80, 70, 110, 300, 400, 350, 500, 450, 480]
   } else {
-    title = 'Vendite Ultimo Anno'
+    title = 'Vendite - Ultimo Anno'
     data = [300, 400, 350, 500, 450, 480, 300, 400, 350, 500, 450, 480]
   }
 

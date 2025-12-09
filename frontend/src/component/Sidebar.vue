@@ -1,5 +1,5 @@
 <template>
-    <div class="d-flex flex-column vh-100 text-white overflow-auto" style="width: 240px; background-color: #1F263E;">
+    <div class="d-flex flex-column vh-100 text-white overflow-auto flex-shrink-0" style="width: 240px; background-color: #1F263E;">
 
         <!-- Contenitore principale con flex-grow per spingere il pulsante in basso -->
         <div class="flex-grow-1 d-flex flex-column ">
