@@ -79,8 +79,7 @@ const UserSchema = new mongoose.Schema({
 
   fingerprintHash: {
     type: String,
-    required: true,
-    unique: true,
+    required: true
   },
 
   /*
