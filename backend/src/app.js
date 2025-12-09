@@ -5,6 +5,12 @@ import authRoutes from "./routes/auth.routes.js";
 import requestLogger from "./middleware/apiLogger.middleware.js";
 import cookieParser from "cookie-parser";
 
+import requestLogger from "./middleware/requestLogger.js";
+import authRoutes from "./routes/auth.routes.js";
+import userRoutes from "./routes/user.routes.js";
+
+import rbacDecisionController from "./controllers/rbacDecision.controller.js";
+
 const app = express();
 
 app.use(cors({
@@ -14,19 +20,29 @@ app.use(cors({
 
 app.use(express.json());
 app.use(cookieParser());
-
-// Middleware di logging per tutte le richieste a questo router
 app.use(requestLogger);
 
-//registrazione e login --> richiedono autenticazione
+/* -----------------------------------------------------
+  Public Routes (login, register, refresh, ecc.)
+------------------------------------------------------ */
 app.use("/auth", authRoutes);
 
-//api users richiedono autenticazione
-app.use("/api/v1/", userRoutes);
+/* -----------------------------------------------------
+  Protected API (la Guard assicura auth + rbac)
+------------------------------------------------------ */
+app.use("/api/v1", userRoutes);
 
+/* -----------------------------------------------------
+  INTERNAL RBAC DECISION ENDPOINT
+  Usato SOLO dalla Guard (proxy)
+------------------------------------------------------ */
+app.post("/rbac/decide", rbacDecisionController);
 
+/* -----------------------------------------------------
+  Default route
+------------------------------------------------------ */
 app.use("/", (req, res) => {
-    res.send("Pagina di login");
+  res.send("Server interno PDP/API attivo");
 });
 
 export default app;
