@@ -7,37 +7,6 @@ function hashToken(token) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-/*
-// CREAZIONE utente
-export async function createUser({
-  email,
-  password,
-  name,
-  fingerprintHash,
-  deviceFingerprint
-}) {
-
-  const passwordHash = await bcrypt.hash(password, 10);
- 
-  // crea utente mongoose
-  const user = new User({
-    email,
-    name: name || null, // Aggiunto fallback a null per name e fingerprintHash
-    fingerprintHash: fingerprintHash || null,
-    deviceFingerprint: typeof deviceFingerprint === 'object' ? JSON.stringify(deviceFingerprint) : deviceFingerprint,
-    auth: {
-      passwordHash,
-      refreshTokens: []
-    }
-  });
-
-  console.log("Salvataggio utente nel DB:", user);
-  const saved = await user.save();
-  console.log("User creato:", saved);
-  return saved;
-}
-*/
-
 async function verifyLogin(email, password) {
   const user = await User.findOne({ email });
 

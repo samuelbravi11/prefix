@@ -45,7 +45,7 @@ export async function authController(req, res, next) {
     }
   };
 
-  console.log("Nuova registrazione:", email, fingerprintHash);
+  //console.log("Nuovo log:", email, fingerprintHash);
 
   try {
     await fs.mkdir(LOG_DIR, { recursive: true });
