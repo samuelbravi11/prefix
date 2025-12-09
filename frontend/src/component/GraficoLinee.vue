@@ -2,7 +2,7 @@
   <div class="card shadow-sm border-0 w-100 h-100">
     <!-- Titolo -->
     <div class="card-body ps-5">
-      <h4>Pannello Riepigolativo KPI</h4>
+      <h4>Grafico a Linee</h4>
     </div>
 
     <!-- Fascia grigia -->

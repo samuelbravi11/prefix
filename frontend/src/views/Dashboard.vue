@@ -5,17 +5,16 @@
     <div class="flex-grow-1 d-flex flex-column">
       <Navbar />
 
-      <!-- Questa div scrolla -->
-      <div class="flex-grow-1 overflow-auto p-4 bg-light">
+      <div class="flex-grow-1 overflow-auto p-4 bg-light" ref="scrollContainer">
         <div class="container-fluid">
           <div class="row mt-4 justify-content-center align-items-center">
-            <div class="col-11 mb-4">
+            <div class="col-11 mb-4" id="pannello-riepilogativo">
               <PannelloRiepigolativo />
             </div>
-            <div class="col-11 mb-4">
+            <div class="col-11 mb-4" id="grafico-linee">
               <GraficoLinee />
             </div>
-            <div class="col-11 mb-4">
+            <div class="col-11 mb-4" id="grafico-torta">
               <GraficoTorta />
             </div>
           </div>

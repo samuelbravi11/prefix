@@ -1,5 +1,6 @@
 <template>
-    <div class="d-flex flex-column vh-100 text-white overflow-auto flex-shrink-0" style="width: 240px; background-color: #1F263E;">
+    <div class="d-flex flex-column vh-100 text-white overflow-auto flex-shrink-0"
+        style="width: 240px; background-color: #1F263E;">
 
         <!-- Contenitore principale con flex-grow per spingere il pulsante in basso -->
         <div class="flex-grow-1 d-flex flex-column ">
@@ -39,14 +40,29 @@
                 </li>
             </ul>
 
-            <!-- Lista con combo box -->
+            <!-- Lista link -->
             <ul class="nav flex-column mt-4 sidebar-menu">
-                <li class="nav-item mb-2">
-                    <select class="form-select sidebar-select ps-5">
-                        <option value="" disabled selected>Grafici</option>
-                        <option value="1">Grafico a torta</option>
-                        <option value="2">Grafico a linee</option>
-                    </select>
+
+                <li class="nav-item">
+                    <a href="#pannello-riepilogativo" class="nav-link ps-5"
+                        :class="{ 'active-link': activeLink === 'pannello-riepilogativo' }"
+                        @click.prevent="scrollTo('pannello-riepilogativo')">
+                        Pannello Riepilogativo
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#grafico-linee" class="nav-link ps-5"
+                        :class="{ 'active-link': activeLink === 'grafico-linee' }"
+                        @click.prevent="scrollTo('grafico-linee')">
+                        Grafico a linee
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#grafico-torta" class="nav-link ps-5"
+                        :class="{ 'active-link': activeLink === 'grafico-torta' }"
+                        @click.prevent="scrollTo('grafico-torta')">
+                        Grafico a torta
+                    </a>
                 </li>
                 <li class="nav-item">
                     <router-link to="/tabellare" class="nav-link ps-5" active-class="active-link">Visualizzazione
@@ -70,7 +86,7 @@
                 </li>
             </ul>
         </div>
-        
+
 
         <!-- Pulsante Logout sempre in basso -->
         <div class="p-3">
@@ -100,11 +116,15 @@
 
 /* Link attivo */
 .sidebar-menu .nav-link.active-link {
-    background-color: #3A4668;  /* leggermente più chiaro */
+    background-color: #3A4668;
+    /* leggermente più chiaro */
     font-weight: bold;
-    border-left: 4px solid #58a6ff; /* bordo colorato a sinistra */
-    padding-left: 6px; /* riduci padding sinistro per il bordo */
+    border-left: 4px solid #58a6ff;
+    /* bordo colorato a sinistra */
+    padding-left: 6px;
+    /* riduci padding sinistro per il bordo */
 }
+
 /* Stile combo box coerente con la sidebar */
 .sidebar-select {
     background-color: #1F263E;
@@ -141,3 +161,51 @@
     background-color: #3A4668;
 }
 </style>
+
+<script setup>
+import { ref, onMounted, onUnmounted } from 'vue'
+
+const activeLink = ref('')
+const scrollContainer = ref(null)
+
+// scroll al click
+function scrollTo(id) {
+    const el = document.getElementById(id)
+    if (el && scrollContainer.value) {
+        scrollContainer.value.scrollTo({
+            top: el.offsetTop,
+            behavior: 'smooth'
+        })
+    }
+}
+
+// scroll spy
+function onScroll() {
+    if (!scrollContainer.value) return
+    const scrollPos = scrollContainer.value.scrollTop + 500 // offset navbar
+
+    const sections = ['pannello-riepilogativo', 'grafico-linee', 'grafico-torta']
+    for (const id of sections) {
+        const el = document.getElementById(id)
+        if (!el) continue
+        if (el.offsetTop <= scrollPos && el.offsetTop + el.offsetHeight > scrollPos) {
+            activeLink.value = id
+            break
+        }
+    }
+}
+
+onMounted(() => {
+    // assegna ref al div scrollabile
+    scrollContainer.value = document.querySelector('.flex-grow-1.overflow-auto')
+    if (scrollContainer.value) {
+        scrollContainer.value.addEventListener('scroll', onScroll)
+    }
+})
+
+onUnmounted(() => {
+    if (scrollContainer.value) {
+        scrollContainer.value.removeEventListener('scroll', onScroll)
+    }
+})
+</script>
