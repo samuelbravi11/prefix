@@ -2,7 +2,10 @@ import { generateAccessToken, generateRefreshToken } from "../services/token.ser
 import userService from "../services/user.service.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import User from "../models/User.js";
+import AuditLog from "../models/AuditLog.js";
+import Role from "../models/Role.js";
 
 function setRefreshTokenCookie(res, refreshToken) {
   res.cookie("refreshToken", refreshToken, {
@@ -18,10 +21,8 @@ function setRefreshTokenCookie(res, refreshToken) {
    REGISTRAZIONE
 --------------------------------------------------- */
 export async function register(req, res) {
-  console.log("REGISTER BODY:", req.body);
-
   try {
-    const { name, surname, email, password, role, fingerprintHash } = req.body;
+    const { name, surname, email, password, fingerprintHash } = req.body;
 
     if (!name || !email || !password || !fingerprintHash) {
       return res.status(400).json({ message: "Tutti i campi sono obbligatori" });
@@ -32,37 +33,39 @@ export async function register(req, res) {
       return res.status(409).json({ message: "Utente già registrato" });
     }
 
+    const pendingRole = await Role.findOne({ roleName: "pending" });
+    if (!pendingRole) {
+      return res.status(500).json({ message: "Ruolo pending non configurato" });
+    }
+
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const newUser = new User({
+    const newUser = await User.create({
       name,
       surname,
       email,
-      role,
       fingerprintHash,
+      status: "pending",
+      roles: [pendingRole._id],
       auth: {
         passwordHash,
+        lastPasswordChangeAt: new Date(),
         refreshTokens: []
       }
     });
 
-    await newUser.save();
-
-    const payload = { userId: newUser._id, role: newUser.role };
-    const accessToken = await generateAccessToken(payload);
-    const refreshToken = await generateRefreshToken(payload);
-
-    await userService.addRefreshToken(newUser._id, refreshToken, fingerprintHash);
-
-    setRefreshTokenCookie(res, refreshToken);
+    await AuditLog.create({
+      entityType: "AUTH",
+      entityId: newUser._id,
+      action: "REGISTER",
+      byUser: newUser._id
+    });
 
     return res.status(201).json({
-      message: "Registrazione completata",
-      accessToken,
+      message: "Registrazione completata. In attesa di approvazione.",
       user: {
         id: newUser._id,
-        email: newUser.email,
-        role: newUser.role
+        email: newUser.email
       }
     });
 
@@ -71,6 +74,7 @@ export async function register(req, res) {
     return res.status(500).json({ message: "Errore interno" });
   }
 }
+
 
 /* ---------------------------------------------------
    LOGIN
@@ -84,18 +88,49 @@ export async function login(req, res) {
       return res.status(401).json({ message: "Credenziali errate" });
     }
 
-    const payload = { userId: user._id, role: user.role };
+    /* ---------------------------------------------
+       BLOCCO PER STATUS (OBBLIGATORIO)
+    --------------------------------------------- */
+    if (user.status !== "active") {
+      await AuditLog.create({
+        entityType: "AUTH",
+        entityId: user._id,
+        action: "LOGIN_DENY",
+        byUser: user._id,
+        details: { status: user.status }
+      });
+
+      return res.status(403).json({
+        message: "Account non attivo. Contatta un amministratore."
+      });
+    }
+
+    /* ---------------------------------------------
+       TOKEN MINIMALISTA
+       (RBAC lo fa la Guard)
+    --------------------------------------------- */
+    const payload = { userId: user._id };
+
     const accessToken = await generateAccessToken(payload);
     const refreshToken = await generateRefreshToken(payload);
 
     await userService.addRefreshToken(user._id, refreshToken, fingerprintHash);
-
     setRefreshTokenCookie(res, refreshToken);
+
+    await AuditLog.create({
+      entityType: "AUTH",
+      entityId: user._id,
+      action: "LOGIN_SUCCESS",
+      byUser: user._id
+    });
 
     return res.json({
       message: "Login effettuato",
       accessToken,
-      user: { id: user._id, email: user.email, role: user.role }
+      user: {
+        id: user._id,
+        email: user.email
+      }
     });
 
   } catch (err) {
@@ -103,6 +138,7 @@ export async function login(req, res) {
     return res.status(500).json({ message: "Errore server login" });
   }
 }
+
 
 /* ---------------------------------------------------
    REFRESH TOKEN
@@ -123,32 +159,35 @@ export async function refresh(req, res) {
       return res.status(401).json({ message: "Refresh token non valido" });
     }
 
-    const userId = payload.userId;
+    const user = await User.findById(payload.userId);
+    if (!user || user.status !== "active") {
+      return res.status(403).json({ message: "Account non valido" });
+    }
 
-    const newRefreshToken = await generateRefreshToken({
-      userId,
-      role: payload.role
-    });
+    const newRefreshToken = await generateRefreshToken({ userId: user._id });
 
-    const rotatedUser = await userService.rotateRefreshToken(
-      userId,
+    const rotated = await userService.rotateRefreshToken(
+      user._id,
       refreshToken,
       newRefreshToken,
       fingerprintHash
     );
 
-    if (!rotatedUser) {
+    if (!rotated) {
       return res.status(401).json({
         message: "Refresh token non valido per questo dispositivo"
       });
     }
 
-    const newAccessToken = await generateAccessToken({
-      userId,
-      role: payload.role
-    });
-
+    const newAccessToken = await generateAccessToken({ userId: user._id });
     setRefreshTokenCookie(res, newRefreshToken);
+
+    await AuditLog.create({
+      entityType: "AUTH",
+      entityId: user._id,
+      action: "REFRESH_SUCCESS",
+      byUser: user._id
+    });
 
     return res.json({ accessToken: newAccessToken });
 
@@ -158,10 +197,40 @@ export async function refresh(req, res) {
   }
 }
 
-/* ---------------------------------------------------
+/* ===================================================
    LOGOUT
---------------------------------------------------- */
+=================================================== */
 export async function logout(req, res) {
-  res.clearCookie("refreshToken", { path: "/auth/refresh" });
-  return res.json({ message: "Logout effettuato" });
+  try {
+    const refreshToken = req.cookies?.refreshToken;
+
+    if (!refreshToken) {
+      return res.status(200).json({ message: "Already logged out" });
+    }
+
+    // hash del refresh token
+    const tokenHash = crypto
+      .createHash("sha256")
+      .update(refreshToken)
+      .digest("hex");
+
+    // rimuove SOLO quel refresh token
+    await User.updateOne(
+      { "auth.refreshTokens.tokenHash": tokenHash },
+      { $pull: { "auth.refreshTokens": { tokenHash } } }
+    );
+
+    // cancella cookie
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production"
+    });
+
+    return res.json({ message: "Logout successful" });
+
+  } catch (err) {
+    console.error("Logout error:", err);
+    return res.status(500).json({ message: "Logout failed" });
+  }
 }

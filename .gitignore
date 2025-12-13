@@ -12,6 +12,9 @@ form/scss/
 # Ma fai un'eccezione (nega l'ignoramento) per questo file specifico
 !form/login.txt
 
+# Ignora tutta la cartella scripts dentro backend
+backend/scripts/
+
 .DS_Store
 
 # -----------NODE-----------

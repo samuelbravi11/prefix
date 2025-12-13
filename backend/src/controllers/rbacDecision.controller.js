@@ -1,98 +1,78 @@
 // controllers/rbacDecision.controller.js
 
-import User from "../models/user.model.js";
-import Role from "../models/role.model.js";
-import Permission from "../models/permission.model.js";
+import User from "../models/User.js";
+import Role from "../models/Role.js";
+import AuditLog from "../models/AuditLog.js";
+import { resolveAllRoles } from "../utils/resolveRoles.js";
 
-/**
- * PDP Decision Controller
- * Riceve dalla Guard (rbacGuard) la richiesta:
- * {
- *   userId,
- *   roles,       <-- opzionale: se non ci sono, li recuperiamo dal DB
- *   action,      <-- GET / POST / PUT / DELETE
- *   resource     <-- es: /api/v1/users
- * }
- */
+/* CONTROLLER PDP
+  Il PDP, tramite l’endpoint /rbac/decide, riceve esclusivamente informazioni semantiche (userId e permission), non la route originale.
+  Il suo compito è caricare i ruoli dell’utente, i permessi associati ai ruoli (ed eventuali gerarchie) e determinare se la permission richiesta è concessa o meno.
+  Il PDP restituisce una decisione PERMIT o DENY al proxy. Il codice quindi riprenderà dal PEP con una variabile di ritorno (PERMIT o DENY) 
+  su cui poi si baserà per decidere se continuare con la chiamata RESTful API di nuovo verso il server interno (GET /api/v1/users/me --> dopo il PERMIT) oppure semplicemente restituisce errore (DENY)
+*/
 export default async function rbacDecisionController(req, res) {
+  const { userId, permission } = req.body;
+
   try {
-    const { userId, roles, action, resource } = req.body;
+    // Recupera utente con ruoli diretti
+    const user = await User.findById(userId).populate("roles");
 
-    // ------------------------------
-    // Recuperiamo i ruoli dell’utente dal DB se non sono nel token
-    // ------------------------------
-    let userRoles = roles;
+    // Se l'utente non esiste --> DENY
+    if (!user) {
+      await AuditLog.create({
+        userId,
+        permission,
+        decision: "DENY",
+        reason: "User not found"
+      });
 
-    if (!userRoles || userRoles.length === 0) {
-      const user = await User.findById(userId).populate("roles");
-
-      if (!user) {
-        return res.json({
-          allow: false,
-          reason: "Utente inesistente",
-        });
-      }
-
-      userRoles = user.roles.map(r => r.name);
+      return res.json({ allow: false });
     }
 
-    // ------------------------------
-    // Recuperiamo i permessi associati ai ruoli dal DB
-    // ------------------------------
-    const roleDocs = await Role.find({ name: { $in: userRoles } })
+    // Se l'utente non è associato ad un ruolo --> DENY
+    if (!user.roles || user.roles.length === 0) {
+      await AuditLog.create({
+        userId,
+        permission,
+        decision: "DENY",
+        reason: "User has no roles assigned"
+      });
+
+      return res.json({ allow: false });
+    }
+
+    // Estrai ID dei ruoli diretti
+    const directRoleIds = user.roles.map(r => r._id);
+
+    // Risolvi gerarchia (RUOLI EREDITATI)
+    const allRoleIds = await resolveAllRoles(directRoleIds);
+
+    // Recupera TUTTI i ruoli (diretti + ereditati) con permessi
+    const roles = await Role.find({ _id: { $in: allRoleIds } })
       .populate("permissions");
 
-    const permissions = roleDocs.flatMap(role =>
+    // Costruisci lista permessi effettivi
+    const permissions = roles.flatMap(role =>
       role.permissions.map(p => p.name)
     );
 
-    // ------------------------------
-    // Normalizziamo il metodo HTTP in un "action type"
-    // ------------------------------
-    const actionMap = {
-      GET: "read",
-      POST: "create",
-      PUT: "update",
-      DELETE: "delete",
-    };
+    // Decisione
+    const allow = permissions.includes(permission);
 
-    const normalizedAction = actionMap[action] || "unknown";
-
-    // ------------------------------
-    // Creiamo il permesso richiesto dalla richiesta
-    // es: "/api/v1/users" + ":" + "update"
-    // → "api/v1/users:update"
-    // ------------------------------
-    const resourceKey = sanitizeResource(resource); // funzione sotto
-    const requiredPermission = `${resourceKey}:${normalizedAction}`;
-
-    // ------------------------------
-    // Controlliamo se l’utente ha questo permesso
-    // ------------------------------
-    const allow = permissions.includes(requiredPermission);
-
-    // ------------------------------
-    // Ritorniamo la decisione alla Guard
-    // ------------------------------
-    return res.json({
-      allow,
-      requiredPermission,
-      permissionsUserHas: permissions,
-      rolesUserHas: userRoles,
-      reason: allow ? "Permit" : "Permission missing"
+    // Audit
+    AuditLog.create({
+      entityType: "RBAC_DECISION",
+      entityId: null,
+      action: allow ? "PERMIT" : "DENY",
+      byUser: user._id,
+      details: { permission, reason: allow ? "Permission granted" : "Permission denied", roles }
     });
 
-  } catch (error) {
-    console.error("Errore PDP decisionale:", error);
-    return res.status(500).json({
-      allow: false,
-      reason: "Errore interno del PDP"
-    });
+    return res.json({ allow });
+
+  } catch (err) {
+    console.error("PDP decision error:", err);
+    return res.status(500).json({ allow: false });
   }
-}
-
-
-/** Utility: rimuove ID e query dagli URL così /api/v1/users/123 → /api/v1/users */
-function sanitizeResource(resource) {
-  return resource.replace(/\/\d+/g, "").replace(/\/$/, "");
 }

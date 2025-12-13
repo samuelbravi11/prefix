@@ -8,7 +8,7 @@ async function refreshAccessToken() {
   const fingerprint = await getDeviceFingerprint();
 
   const res = await axios.post(
-    "http://localhost:3000/auth/refresh",
+    "/auth/refresh",
     {
       fingerprintHash: fingerprint.hash
     },

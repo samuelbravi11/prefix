@@ -52,7 +52,7 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import bgImage from "../assets/images/login_image.jpg";
-import { login as loginService } from "../api/authService.js"; //importa funzione login
+import { login as loginService } from "../api/authService.js";
 
 const email = ref("");
 const password = ref("");
@@ -65,15 +65,26 @@ async function login() {
   }
 
   try {
+    
+    // Salva la risposta in una variabile
+    // Se la chiamata va a buon fine, il cookie è settato
     const response = await loginService(email.value, password.value);
 
-    const token = response.data.accessToken;
-    localStorage.setItem("authToken", token);
+    // SALVA IL TOKEN
+    localStorage.setItem("accessToken", response.data.accessToken);
 
+    // Da qui in poi tutte le chiamate passano dal proxy
     router.push("/dashboard");
   } catch (error) {
-    alert("Email o password errati");
     console.error(error);
+
+    if (error.response?.status === 401) {
+      alert("Email o password errati");
+    } else if (error.response?.status === 403) {
+      alert("Utente non ancora attivo");
+    } else {
+      alert("Errore durante il login");
+    }
   }
 }
 </script>

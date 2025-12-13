@@ -5,54 +5,54 @@ import crypto from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOG_DIR = path.join(__dirname, "..", "..", "logs");
-const LOG_FILE = path.join(LOG_DIR, "security_audit_trail.log");
+const LOG_FILE = path.join(LOG_DIR, "auth_audit.log");
 
-// log audit antifrode / account / fingerprint
-export async function authController(req, res, next) {
-  const { email, deviceFingerprint, fingerprintHash, userId } = req.body;
+/**
+ * Security Audit Middleware
+ * Registra eventi di autenticazione (login, register, refresh)
+ */
+export default function authAudit(eventType) {
+  return async function (req, res, next) {
+    try {
+      const entry = {
+        eventId: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
+        eventType,
 
-  const entry = {
-    eventId: crypto.randomUUID(),
-    timestamp: new Date().toISOString(),
-    eventType: "USER_REGISTER",
+        // Identità (se disponibile)
+        email: req.body?.email || null,
+        userId: req.user?.id || null,
 
-    userId: userId || null,
-    email,
+        // Esito (default: successo, override nel controller se serve)
+        success: true,
 
-    success: true, // se gestisci login fallito cambi a false
+        // Network
+        ip:
+          req.headers["x-forwarded-for"] ||
+          req.socket.remoteAddress ||
+          null,
 
-    ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress,
+        // Device
+        device: {
+          userAgent: req.headers["user-agent"] || null,
+          platform: req.headers["sec-ch-ua-platform"] || null,
+          isMobile: req.headers["user-agent"]
+            ? /mobile/i.test(req.headers["user-agent"])
+            : null
+        },
 
-    device: {
-      userAgent: req.headers["user-agent"] || null,
-      platform: req.headers["sec-ch-ua-platform"] || null,
-      isMobile: req.headers["user-agent"]
-        ? /mobile/i.test(req.headers["user-agent"])
-        : null
-    },
+        // Fingerprint (se presente)
+        fingerprint: req.body?.fingerprintHash || null
+      };
 
-    fingerprint: {
-      hash: fingerprintHash,
-      metaSize: deviceFingerprint
-        ? JSON.stringify(deviceFingerprint).length
-        : null
-    },
+      await fs.mkdir(LOG_DIR, { recursive: true });
+      await fs.appendFile(LOG_FILE, JSON.stringify(entry) + "\n");
 
-    // potresti aggiungere geoIP se previsto legalmente:
-    geo: {
-      country: null,
-      city: null
+    } catch (err) {
+      // audit NON deve mai bloccare il flusso
+      console.error("Auth audit error:", err);
     }
+
+    next();
   };
-
-  //console.log("Nuovo log:", email, fingerprintHash);
-
-  try {
-    await fs.mkdir(LOG_DIR, { recursive: true });
-    await fs.appendFile(LOG_FILE, JSON.stringify(entry) + "\n");
-  } catch (err) {
-    console.error("Errore salvataggio fingerprint:", err);
-  }
-
-  next();
 }

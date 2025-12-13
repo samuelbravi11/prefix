@@ -67,33 +67,31 @@ import { register as registerService } from "../api/authService.js";
 const email = ref("");
 const password = ref("");
 const name = ref("");
+const surname = ref("");
 const router = useRouter();
 
 async function doRegister() {
   if (!email.value || !password.value || !name.value) {
-    alert("Compila tutti i campi");
+    alert("Compila tutti i campi obbligatori");
     return;
   }
 
   try {
-    const response = await registerService(email.value, password.value, name.value);
+    await registerService({
+      email: email.value,
+      password: password.value,
+      name: name.value,
+      surname: surname.value
+    });
 
-    // token presente → accedi direttamente
-    if (response.data?.accessToken) {
-      localStorage.setItem("authToken", response.data.accessToken);
-      router.push("/dashboard");
-    } else {
-      alert("Registrazione avvenuta, ora accedi");
-      router.push("/");
-    }
-
-  } catch (error) {
-    console.error(error);
+    alert("Registrazione completata. Attendi l’attivazione e poi accedi.");
+    router.push("/");
+  } catch (err) {
+    console.error(err);
     alert("Errore durante la registrazione");
   }
 }
 </script>
-
 
 
 <style scoped>

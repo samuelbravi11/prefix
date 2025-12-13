@@ -1,6 +1,10 @@
 import { verifyAccessToken } from "../services/token.service.js";
 
-
+/* RICHIESTA TOKEN
+  La Guard controlla il token
+  - token mancante o invalido --> 401 Unauthorized
+  - token valido --> la Guard sa chi è l’utente --> il middleware continua (next()) passando alla fase di autorizzazione (verifica ruoli dell'utente)
+*/
 async function requireAuth(req, res, next) {
   try {
     const header = req.headers.authorization;

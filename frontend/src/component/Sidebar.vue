@@ -90,7 +90,9 @@
 
         <!-- Pulsante Logout sempre in basso -->
         <div class="p-3">
-            <button class="btn w-100 sidebar-logout-btn">Logout</button>
+            <button class="btn w-100 sidebar-logout-btn" @click="logout">
+                Logout
+            </button>
         </div>
 
     </div>
@@ -164,11 +166,33 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+// LOGOUT
+async function logout() {
+    try {
+        // Chiama il backend (refresh token invalidato)
+        await fetch("/auth/logout", {
+            method: "POST",
+            credentials: "include"
+        })
+    } catch (err) {
+        console.error("Errore logout:", err)
+        // anche se fallisce, procediamo comunque
+    } finally {
+        // Pulisci stato client
+        localStorage.removeItem("accessToken")
+
+        // Redirect a login
+        router.push("/login")
+    }
+}
 
 const activeLink = ref('')
 const scrollContainer = ref(null)
 
-// scroll al click
 function scrollTo(id) {
     const el = document.getElementById(id)
     if (el && scrollContainer.value) {
@@ -179,10 +203,9 @@ function scrollTo(id) {
     }
 }
 
-// scroll spy
 function onScroll() {
     if (!scrollContainer.value) return
-    const scrollPos = scrollContainer.value.scrollTop + 500 // offset navbar
+    const scrollPos = scrollContainer.value.scrollTop + 500
 
     const sections = ['pannello-riepilogativo', 'grafico-linee', 'grafico-torta']
     for (const id of sections) {
@@ -196,7 +219,6 @@ function onScroll() {
 }
 
 onMounted(() => {
-    // assegna ref al div scrollabile
     scrollContainer.value = document.querySelector('.flex-grow-1.overflow-auto')
     if (scrollContainer.value) {
         scrollContainer.value.addEventListener('scroll', onScroll)

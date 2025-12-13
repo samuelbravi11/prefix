@@ -1,5 +1,18 @@
 gestione richieste admin centrale
 
+ZANARDO
+--> frontend con chiamata a tutte le richieste e visualizzazione
+--> admin centrale clicca su ruolo e conferma --> invia chiamata al backend con le informazioni
+
+GERARDO
+--> backend preleva ruolo utente e setta:
+--> status: active + roles: [ruolo utente]
+
+
+
+
 authservice in frontend si può eliminare
 
 collegamento OTP --> da chiedere al tutor
+
+gestione STATUS utente (pending, attivo, disabilitato, sospeso)

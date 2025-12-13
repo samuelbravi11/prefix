@@ -16,5 +16,31 @@ export default defineConfig({
         quietDeps: true
       }
     }
+  },
+  server: {
+    port: 5173,
+
+    proxy: {
+      // AUTH
+      "/auth": {
+        target: "http://localhost:5000",
+        changeOrigin: true,
+        secure: false
+      },
+
+      // API PROTETTE
+      "/api": {
+        target: "http://localhost:5000",
+        changeOrigin: true,
+        secure: false
+      },
+
+      // (opzionale) RBAC – solo per debug
+      "/rbac": {
+        target: "http://localhost:5000",
+        changeOrigin: true,
+        secure: false
+      }
+    }
   }
 })

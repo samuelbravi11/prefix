@@ -11,7 +11,7 @@ const RefreshTokenSchema = new mongoose.Schema({
   //in questo modo posso invalidare i token di un device specifico
   //allo stesso tempo se un malintenzionato ruba un token (difficile poiché è criptato durante l'invio e salvato su HttpOnly Cookie lato client) non può usarlo senza la fingerprint e inoltre nel caso di attacco il JWT sarebbe uguale ma il fingerprintHash diverso quindi mismatch
   tokenHash: { type: String, required: true },
-  //fingerprintHash: { type: String, required: true }, // legato al device
+  fingerprintHash: { type: String, required: true }, // legato al device
   createdAt: { type: Date, default: Date.now }
 }, { _id: false });
 
@@ -63,11 +63,18 @@ const UserSchema = new mongoose.Schema({
     unique: true,
   },
 
-  role: {
+  roles: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Role"
+  }],
+
+  status: {
     type: String,
-    enum: ["local_admin", "central_admin", "contractor"],
-    default: "local_admin"
+    enum: ["pending", "active", "suspended", "disabled"],
+    default: "pending",
+    index: true
   },
+
 
   /*
   securityNumber: {

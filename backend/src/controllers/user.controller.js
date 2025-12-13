@@ -33,7 +33,7 @@ export const getAllUsers = async (req, res) => {
   }
 };
 
-// GET ME (con middleware requireAuth)
+
 export const getMe = async (req, res) => {
   try {
     if (!req.user) {
