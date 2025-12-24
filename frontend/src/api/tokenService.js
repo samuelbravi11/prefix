@@ -1,5 +1,4 @@
-// src/api/tokenService.js
-
+/* NON SERVE PIU'
 import axios from "axios";
 import { getDeviceFingerprint } from "../utils/fingerprint.js";
 
@@ -44,7 +43,7 @@ export function setupAxiosRefresh() {
           const newToken = await refreshAccessToken();
 
           // salva nuovo token
-          localStorage.setItem("authToken", newToken);
+          localStorage.setItem("accessToken", newToken);
 
           // aggiorna request originale con token nuovo
           originalRequest.headers["Authorization"] = "Bearer " + newToken;
@@ -52,7 +51,7 @@ export function setupAxiosRefresh() {
           return axios(originalRequest);
         } catch (refreshError) {
           // refresh fallito → logout
-          localStorage.removeItem("authToken");
+          localStorage.removeItem("accessToken");
           window.location.href = "/login";
         }
       }
@@ -61,3 +60,4 @@ export function setupAxiosRefresh() {
     }
   );
 }
+*/

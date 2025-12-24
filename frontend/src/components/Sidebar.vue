@@ -167,27 +167,20 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth.store'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 // LOGOUT
 async function logout() {
-    try {
-        // Chiama il backend (refresh token invalidato)
-        await fetch("/auth/logout", {
-            method: "POST",
-            credentials: "include"
-        })
-    } catch (err) {
-        console.error("Errore logout:", err)
-        // anche se fallisce, procediamo comunque
-    } finally {
-        // Pulisci stato client
-        localStorage.removeItem("accessToken")
-
-        // Redirect a login
-        router.push("/login")
-    }
+  try {
+    // Usa l'azione di logout dello store (che gestisce tutto)
+    await authStore.logout()
+    // NO router.push (reindirizzamento) qui perché il logout nel layout AuthLayout.vue lo gestisce già
+  } catch (err) {
+    console.error("Errore logout:", err)
+  }
 }
 
 const activeLink = ref('')
