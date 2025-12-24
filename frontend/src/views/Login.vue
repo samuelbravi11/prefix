@@ -51,12 +51,15 @@
 <script setup>
 import { ref } from "vue";
 import { useRouter } from "vue-router";
+import { useAuthStore } from "@/stores/auth.store";
+import { login as loginService } from "@/api/authService.js";
 import bgImage from "../assets/images/login_image.jpg";
-import { login as loginService } from "../api/authService.js";
+
 
 const email = ref("");
 const password = ref("");
 const router = useRouter();
+const authStore = useAuthStore();
 
 async function login() {
   if (!email.value || !password.value) {
@@ -65,18 +68,56 @@ async function login() {
   }
 
   try {
-    
-    // Salva la risposta in una variabile
-    // Se la chiamata va a buon fine, il cookie è settato
+    // login --> ricevo SOLO il token
     const response = await loginService(email.value, password.value);
+    
+    console.group("=== DEBUG TOKEN FLOW ===");
+    console.log("1. Token ricevuto dal backend:");
+    console.log("   Tipo:", typeof response.data.accessToken);
+    console.log("   Lunghezza:", response.data.accessToken.length);
+    console.log("   Valore:", response.data.accessToken);
+    console.log("   Inizia con 'eyJ'?", response.data.accessToken.startsWith('eyJ'));
+    
+    // Controlla se è un JWT valido
+    const parts = response.data.accessToken.split('.');
+    console.log("   Parti JWT:", parts.length);
+    if (parts.length === 3) {
+      try {
+        const header = JSON.parse(atob(parts[0]));
+        const payload = JSON.parse(atob(parts[1]));
+        console.log("   Header:", header);
+        console.log("   Payload:", payload);
+      } catch (e) {
+        console.log("   ERRORE: Non è un JWT valido!", e);
+      }
+    }
 
-    // SALVA IL TOKEN
+    // salva token
     localStorage.setItem("accessToken", response.data.accessToken);
+    const salvato = localStorage.getItem("accessToken");
+    // Codifica in base64 per sicurezza
+    const encodedToken = btoa(response.data.accessToken); // Solo se il token non è già base64
+    console.log("Salvato:", salvato, "Encoded:", encodedToken);
 
-    // Da qui in poi tutte le chiamate passano dal proxy
-    router.push("/dashboard");
+    console.log("2. Token salvato in localStorage:");
+    console.log("   Tipo:", typeof salvato);
+    console.log("   Lunghezza:", salvato?.length);
+    console.log("   Valore:", salvato);
+    console.log("   Uguale all'originale?", salvato === response.data.accessToken);
+    console.groupEnd();
+
+    // recupera utente reale
+    await authStore.fetchMe();
+    console.log("Auth store dopo fetchMe:", {
+      isAuthenticated: authStore.isAuthenticated,
+      user: authStore.user
+    });
+
+    // entro nel layout autenticato
+    router.push("/");
+
   } catch (error) {
-    console.error(error);
+    console.error("Errore login:", error);
 
     if (error.response?.status === 401) {
       alert("Email o password errati");
@@ -88,6 +129,3 @@ async function login() {
   }
 }
 </script>
-
-
-<style scoped></style>

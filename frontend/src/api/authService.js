@@ -11,17 +11,14 @@ export async function login(email, password) {
   console.log("[VUE DEBUG] Chiamando login a:", "/auth/login");
   console.log("[VUE DEBUG] Fingerprint hash:", fingerprint.hash);
 
-  return axios.post(
-    "/auth/login",
-    {
-      email,
-      password,
-      fingerprintHash: fingerprint.hash
-    },
-    {
-      withCredentials: true
-    }
-  );
+  // SALVA IL FINGERPRINT PER IL REFRESH
+  localStorage.setItem("fingerprintHash", fingerprint.hash);
+
+  return axios.post("/auth/login", {
+    email,
+    password,
+    fingerprintHash: fingerprint.hash
+  });
 }
 
 export async function register({ email, password, name, surname = "" }) {
@@ -40,4 +37,14 @@ export async function register({ email, password, name, surname = "" }) {
       withCredentials: true
     }
   );
+}
+
+export async function fetchMe() {
+  const token = localStorage.getItem("accessToken");
+
+  return axios.get("/auth/me", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
 }
