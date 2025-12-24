@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import User from "../models/User.js";
 import crypto from "crypto";
+import { verifyRefreshToken } from "./token.service.js";
 
 // helper per hash token
 function hashToken(token) {
@@ -37,18 +38,39 @@ async function addRefreshToken(userId, refreshToken, fingerprintHash) {
   );
 }
 
-async function rotateRefreshToken(userId, oldToken, newToken, fingerprintHash) {
-  const oldHash = bcrypt.hashSync(oldToken, 10);
-  const newHash = bcrypt.hashSync(newToken, 10);
+export async function rotateRefreshToken(userId, oldToken, newToken, fingerprintHash) {
+  try {
+    // Verifica che il vecchio token sia valido
+    const oldPayload = await verifyRefreshToken(oldToken); // <-- USA VERIFYREFRESHTOKEN
+    
+    if (!oldPayload || oldPayload.userId !== userId.toString()) {
+      return false;
+    }
 
-  return User.findOneAndUpdate(
-    {
-      _id: userId,
-      "auth.refreshTokens.tokenHash": oldHash,
-      "auth.refreshTokens.fingerprintHash": fingerprintHash
-    },
-    { $set: { "auth.refreshTokens.$.tokenHash": newHash } }
-  );
+    // Calcola hash
+    const oldHash = crypto.createHash("sha256").update(oldToken).digest("hex");
+    const newHash = crypto.createHash("sha256").update(newToken).digest("hex");
+
+    // Aggiorna nel database
+    const result = await User.updateOne(
+      {
+        _id: userId,
+        "auth.refreshTokens.tokenHash": oldHash,
+        "auth.refreshTokens.fingerprintHash": fingerprintHash,
+      },
+      {
+        $set: { 
+          "auth.refreshTokens.$.tokenHash": newHash,
+          "auth.refreshTokens.$.updatedAt": new Date()
+        },
+      }
+    );
+
+    return result.modifiedCount > 0;
+  } catch (error) {
+    console.error("Errore nella rotazione del token:", error);
+    return false;
+  }
 }
 
 export default {

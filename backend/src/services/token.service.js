@@ -5,6 +5,10 @@ if (!process.env.JWT_SECRET) {
   throw new Error("Missing env: JWT_SECRET");
 }
 
+if (!process.env.REFRESH_TOKEN_SECRET) {
+  throw new Error("Missing env: REFRESH_TOKEN_SECRET");
+}
+
 if (!process.env.ACCESS_EXP) {
   throw new Error("Missing env: ACCESS_EXP");
 }
@@ -14,7 +18,8 @@ if (!process.env.REFRESH_EXP) {
 }
 
 const encoder = new TextEncoder();
-const key = encoder.encode(process.env.JWT_SECRET);
+const accessKey = encoder.encode(process.env.JWT_SECRET);
+const refreshKey = encoder.encode(process.env.REFRESH_TOKEN_SECRET);
 
 
 
@@ -27,14 +32,22 @@ export async function generateAccessToken(payload) {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(process.env.ACCESS_EXP)
-    .sign(key);
+    .sign(accessKey);
 }
 
 export async function verifyAccessToken(token) {
+  console.log("\n=== DEBUG TOKEN VERIFICATION ===");
+  console.log("Token ricevuto:", token?.substring?.(0, 50) + "...");
+  console.log("JWT_SECRET presente:", !!process.env.JWT_SECRET);
+  
   try {
-    const { payload } = await jwtVerify(token, key);
+    const { payload } = await jwtVerify(token, accessKey);
+    console.log("Token VALIDO - Payload:", payload);
+    console.log("=== END DEBUG ===\n");
     return payload;
   } catch (err) {
+    console.error("Token INVALIDO - Errore:", err.message);
+    console.log("=== END DEBUG ===\n");
     throw new Error("Access token invalido o scaduto");
   }
 }
@@ -50,14 +63,15 @@ export async function generateRefreshToken(payload) {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(process.env.REFRESH_EXP)
-    .sign(key);
+    .sign(refreshKey); // <-- USA REFRESH KEY
 }
 
 export async function verifyRefreshToken(token) {
   try {
-    const { payload } = await jwtVerify(token, key);
+    const { payload } = await jwtVerify(token, refreshKey); // <-- USA REFRESH KEY
     return payload;
   } catch (err) {
+    console.error("Refresh token invalido:", err.message);
     throw new Error("Refresh token invalido o scaduto");
   }
 }
@@ -65,7 +79,7 @@ export async function verifyRefreshToken(token) {
 // DEBUG — decodifica senza verificare la firma
 export async function decodeToken(token) {
   try {
-    const { payload } = await jwtVerify(token, key);
+    const { payload } = await jwtVerify(token, accessKey);
     return payload;
   } catch {
     return null;

@@ -1,7 +1,4 @@
-/**
- * Header usato per identificare le richieste provenienti
- * ESCLUSIVAMENTE dal proxy/guard.
- */
+// Header usato per identificare le richieste provenienti ESCLUSIVAMENTE dal proxy/guard.
 export const INTERNAL_PROXY_HEADER = "x-internal-proxy";
 export const INTERNAL_PROXY_VALUE = "true";
 
@@ -10,6 +7,7 @@ export const INTERNAL_PROXY_VALUE = "true";
   Il server interno lo usa per rifiutare accessi diretti e fidarsi solo del proxy
   Questa è la fiducia tra proxy e server.
 */
+/* --> FUNZIONE SPOSTATA SU proxyApp.js
 export function withInternalProxyHeader(proxyReq, req, res) {
   console.log("[PROXY HEADER DEBUG] Setting header for request to:", req.originalUrl);
   console.log("[PROXY HEADER DEBUG] Request headers:", req.headers);
@@ -19,9 +17,10 @@ export function withInternalProxyHeader(proxyReq, req, res) {
   const headers = proxyReq.getHeaders();
   console.log("[PROXY HEADER DEBUG] Headers being sent:", headers);
 }
+*/
 
 /* Middleware da usare NEL SERVER INTERNO
-   Blocca ogni accesso diretto (browser, curl, postman, ecc.)
+  Blocca ogni accesso diretto (browser, curl, postman, ecc.)
 */
 export function requireInternalProxy(req, res, next) {
   const internalHeader = req.headers[INTERNAL_PROXY_HEADER];

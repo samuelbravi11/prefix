@@ -1,15 +1,37 @@
+import app from "./proxyApp.js";
 import dotenv from "dotenv";
+import http from "http";
+import { initWebSocket } from "./gateway/ws.gateway.js";
 
 // Carica variabili ambiente --> salvate in memoria ram per tutta l'esecuzione del server
 dotenv.config({ path: new URL("../.env", import.meta.url).pathname });
 
-import app from "./proxyApp.js";
+/* DIFFERENZA TRA INIZIALIZZAZIONE SERVER PROXY E SERVER PDP
+    Con app.listen() --> Express crea internamente un server HTTP
+    Con http.createServer(app) --> tu crei il server HTTP e lo passi ad Express
 
+    Con Socket.IO, se usi app.listen():
+    - Express crea internamente un server HTTP
+    - Tu non hai accesso diretto al server
+    - Non puoi “attaccare” Socket.IO correttamente
+    Con http.createServer(app):
+    - Tu crei il server HTTP
+    - Hai accesso diretto al server
+    - Puoi “attaccare” Socket.IO al server creato
+*/
 async function startProxyServer() {
     try {
         const PORT = 5000;
 
-        app.listen(PORT, "127.0.0.1", () => {
+        // Creazione server HTTP
+        const server = http.createServer(app);
+        // Inizializzazione WebSocket --> Socket.IO si aggancia allo stesso server
+        initWebSocket(server);
+
+        // Il server ora gestisce due canali logici:
+        // - HTTP → REST / Proxy / RBAC
+        // - WebSocket → eventi realtime
+        server.listen(PORT, "127.0.0.1", () => {
             console.log(`Server Proxy avviato su 127.0.0.1:${PORT}`);
         });
     } catch (error) {

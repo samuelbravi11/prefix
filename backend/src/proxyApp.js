@@ -1,30 +1,26 @@
+// src/proxy/proxyApp.js
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import { createProxyMiddleware } from "http-proxy-middleware";
 import http from "http";
 
 import requestLogger from "./middleware/apiLogger.middleware.js";
 import requireAuth from "./middleware/authGuard.middleware.js";
 import rbacGuard from "./middleware/rbacGuard.middleware.js";
-import { withInternalProxyHeader } from "./internalProxySecurity.js";
 import requireActiveUser from "./middleware/requireActiveUser.middleware.js";
-
+import { emitEvent } from "./gateway/ws.gateway.js";
 
 const proxyApp = express();
 
+
+/*
 // DEBUG middleware per vedere tutte le richieste in arrivo
-proxyApp.use((req, res, next) => {
-  console.log("\n=== PROXY REQUEST INFO ===");
-  console.log("Method:", req.method);
-  console.log("Original URL:", req.originalUrl);
-  console.log("Base URL:", req.baseUrl);
-  console.log("Path:", req.path);
-  console.log("URL:", req.url);
-  console.log("Headers:", JSON.stringify(req.headers, null, 2));
-  console.log("=== END PROXY REQUEST INFO ===\n");
+proxyApp.use("/api", (req, res, next) => {
+  console.log("MATCH /api GENERICO", req.originalUrl);
   next();
 });
+*/
+
 
 /* CORS
   intercetta TUTTE le richieste OPTIONS --> risponde subito, senza passare da: requireAuth, rbacGuard e altri middleware
@@ -44,6 +40,87 @@ proxyApp.use(cookieParser());
 // LOGGER
 proxyApp.use(requestLogger);
 
+/* ROUTE PER GESTIRE LE NOTIFICHE
+  Il proxy:
+  - riceve la notifica dal server interno (notification.service.js)
+  - non conosce il dominio dell'evento, si limita a inoltrarlo
+  - emette l'evento WS verso i client connessi in base a userId/role/buildingId (rooms)
+*/
+proxyApp.post("/internal/events", (req, res) => {
+  // solo il server interno può chiamare questa route, usando un particolare flag (x-internal-proxy)
+  if (req.headers["x-internal-proxy"] !== "true") {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+  // Emissione evento WS
+  emitEvent(req.body);
+
+  res.status(204).end();
+});
+
+
+/* =====================================================
+   FUNZIONE DI PROXY MANUALE
+===================================================== */
+// Si occupa di inoltrare la richiesta al server interno usando http.request e settando manualmente l'header x-internal-proxy
+const manualProxy = (req, res) => {
+  console.log(`[MANUAL PROXY] Inoltrando richiesta: ${req.method} ${req.originalUrl}`);
+  
+  const options = {
+    hostname: '127.0.0.1',
+    port: 4000,
+    path: req.originalUrl,
+    method: req.method,
+    headers: {
+      ...req.headers,
+      'x-internal-proxy': 'true',
+      'x-user-id': req.user?.userId || '',
+      'host': '127.0.0.1:4000',
+      'connection': 'close'
+    }
+  };
+  
+  console.log(`[MANUAL PROXY] Opzioni: ${JSON.stringify({
+    method: options.method,
+    path: options.path,
+    headers: {
+      'x-internal-proxy': options.headers['x-internal-proxy'],
+      'authorization': options.headers['authorization'] ? 'presente' : 'assente'
+    }
+  }, null, 2)}`);
+  
+  const proxyReq = http.request(options, (proxyRes) => {
+    console.log(`[MANUAL PROXY] Risposta dal server interno: ${proxyRes.statusCode} ${req.originalUrl}`);
+    
+    // Inoltra gli header della risposta
+    const responseHeaders = { ...proxyRes.headers };
+    
+    // Assicurati che CORS sia gestito correttamente
+    responseHeaders['access-control-allow-origin'] = 'http://localhost:5173';
+    responseHeaders['access-control-allow-credentials'] = 'true';
+    
+    res.writeHead(proxyRes.statusCode, responseHeaders);
+    
+    // Pipe della risposta al client
+    proxyRes.pipe(res);
+  });
+  
+  proxyReq.on('error', (err) => {
+    console.error('[MANUAL PROXY ERROR]', err);
+    res.status(500).json({ 
+      message: 'Proxy error',
+      error: err.message 
+    });
+  });
+  
+  // Se c'è un body, invialo
+  if (req.body && Object.keys(req.body).length > 0) {
+    const bodyString = JSON.stringify(req.body);
+    proxyReq.write(bodyString);
+    console.log(`[MANUAL PROXY] Inviando body (${bodyString.length} bytes)`);
+  }
+  
+  proxyReq.end();
+};
 
 /* BUGFIX
   Inoltravo la richiesta da proxy a server e si cancellava la prima parte della route auth (esempio: proxy (/auth/login) --> server (/login)).
@@ -55,12 +132,13 @@ proxyApp.use(requestLogger);
   Nelle route private il problema non si presentava perché veniva usato http-proxy-middleware,
   che inoltra correttamente l’URL completo (req.originalUrl) e gestisce automaticamente il path rewriting.
 */ // MANUAL PROXY PER /auth
+/* =====================================================
+   PUBLIC ROUTES - AUTH
+===================================================== */
 proxyApp.use("/auth", (req, res) => {
-  console.log("[MANUAL PROXY /auth] Inoltrando richiesta");
+  console.log("[MANUAL PROXY /auth] Inoltrando richiesta:", req.method, req.path);
   
-  // RICOSTRUIAMO l'URL completo per il server interno
   const fullPath = req.baseUrl + (req.path === '/' ? '' : req.path);
-  console.log("[MANUAL PROXY /auth] Full path ricostruito:", fullPath);
   
   const options = {
     hostname: '127.0.0.1',
@@ -74,15 +152,8 @@ proxyApp.use("/auth", (req, res) => {
     }
   };
   
-  console.log("[MANUAL PROXY /auth] Opzioni di connessione:", JSON.stringify(options, null, 2));
-  
   const proxyReq = http.request(options, (proxyRes) => {
-    console.log("[MANUAL PROXY /auth] Risposta dal server interno:", proxyRes.statusCode);
-    
-    // Inoltra gli header della risposta
     res.writeHead(proxyRes.statusCode, proxyRes.headers);
-    
-    // Pipe della risposta al client
     proxyRes.pipe(res);
   });
   
@@ -94,78 +165,126 @@ proxyApp.use("/auth", (req, res) => {
     });
   });
   
-  // Se c'è un body, invialo
   if (req.body && Object.keys(req.body).length > 0) {
-    console.log("[MANUAL PROXY /auth] Inviando body:", JSON.stringify(req.body));
     proxyReq.write(JSON.stringify(req.body));
   }
   
   proxyReq.end();
 });
 
-// PROXY PER LE ALTRE ROTTE (guarda in fondo)
-const internalProxy = createProxyMiddleware({
-  target: "http://127.0.0.1:4000",
-  changeOrigin: false,
-  onProxyReq: withInternalProxyHeader
-});
 
-/* NON FUNZIONA NON SO PERCHE' BUGFIX RISOLTO VEDI SOPRA STO IMPAZZENDO
-/ =====================================================
-   PUBLIC ROUTES
-===================================================== /
-proxyApp.use(
-  "/auth",
-  internalProxy
-);
-*/
 
 /* =====================================================
-   PROTECTED ROUTES
+   PDP (RBAC DECISION ENDPOINT) --> USATO SOLO DAL PROXY
 ===================================================== */
+// Faccio passare tutte le chiamate ad un unico endpoint.
+// Questo perché al PDP interessa solo:
+// - user.ID --> da cui preleva il ruolo e i permessi
+// - permission --> permesso dell'azione originale (da confrontare con i permessi utente)
+proxyApp.use("/rbac", (req, res) => {
+  console.log("[MANUAL PROXY /rbac] Inoltrando richiesta:", req.method, req.path);
+  
+  const fullPath = req.baseUrl + (req.path === '/' ? '' : req.path);
+  
+  const options = {
+    hostname: '127.0.0.1',
+    port: 4000,
+    path: fullPath,
+    method: req.method,
+    headers: {
+      ...req.headers,
+      'x-internal-proxy': 'true',
+      'host': '127.0.0.1:4000'
+    }
+  };
+  
+  const proxyReq = http.request(options, (proxyRes) => {
+    console.log(`[MANUAL PROXY /rbac] Risposta: ${proxyRes.statusCode}`);
+    res.writeHead(proxyRes.statusCode, proxyRes.headers);
+    proxyRes.pipe(res);
+  });
+  
+  proxyReq.on('error', (err) => {
+    console.error('[MANUAL PROXY /rbac ERROR]', err);
+    res.status(500).json({ 
+      message: 'Proxy error',
+      error: err.message 
+    });
+  });
+  
+  if (req.body && Object.keys(req.body).length > 0) {
+    proxyReq.write(JSON.stringify(req.body));
+  }
+  
+  proxyReq.end();
+});
+
+
+
+/* =====================================================
+   PROTECTED ROUTES - API V1 --> GUARDA IN FONDO
+===================================================== */
+// Tutte le rotte API protette passano da qui
+// Questo perché il proxy deve applicare la guardia RBAC prima di inoltrare la richiesta al server interno
+// Inoltre faccio passare tutte le richieste API per il proxy manuale (manualProxy) per avere un controllo completo sugli header e sul flusso di richiesta/risposta
+
+// API per users
 proxyApp.use(
   "/api/v1/users",
   requireAuth,
   requireActiveUser,
   rbacGuard,
-  internalProxy
+  manualProxy
 );
 
+// API per dashboard
 proxyApp.use(
   "/api/v1/dashboard",
   requireAuth,
   requireActiveUser,
   rbacGuard,
-  internalProxy
+  manualProxy
 );
 
+// API per requests
 proxyApp.use(
   "/api/v1/requests",
   requireAuth,
   requireActiveUser,
   rbacGuard,
-  internalProxy
+  manualProxy
 );
 
-// PDP --> RBAC decision endpoint (USATO SOLO DAL PROXY)
-// Faccio passare tutte le chiamate ad un unico endpoint
-// --> questo perché al PDP interessa solo:
-// - user.ID --> da cui preleva il ruolo e i permessi
-// - permission --> permesso dell'azione originale (da confrontare con i permessi utente)
+// API per notifications
 proxyApp.use(
-  "/rbac",
-  internalProxy
+  "/api/v1/notifications",
+  requireAuth,
+  requireActiveUser,
+  rbacGuard,
+  (req, res, next) => {
+    console.log("[NOTIFICATIONS ROUTE] Prima del proxy manuale");
+    console.log("  User ID:", req.user?.userId);
+    console.log("  Original URL:", req.originalUrl);
+    next();
+  },
+  manualProxy
 );
 
 // Route di test
 proxyApp.get("/health", (req, res) => {
-  res.json({ status: "Proxy server is running" });
+  res.json({ 
+    status: "Proxy server is running",
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Gestione errori 404
 proxyApp.use((req, res) => {
   console.log("[PROXY 404] Route non trovata:", req.method, req.originalUrl);
-  res.status(404).json({ message: "Route non trovata nel proxy" });
+  res.status(404).json({ 
+    message: "Route non trovata nel proxy",
+    path: req.originalUrl
+  });
 });
 
 // Error handling middleware
@@ -181,7 +300,6 @@ export default proxyApp;
 
 
 /* PROXY (Guard / API Gateway)
-
   http-proxy-middleware è utilizzato per implementare un reverse proxy applicativo
   all’interno di Express.
 

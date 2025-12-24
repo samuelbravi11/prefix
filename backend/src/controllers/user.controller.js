@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import User from "../models/User.js";
 
-// GET ALL USERS
+// GET ALL USERS - Solo per scopi di debug
 export const getAllUsers = async (req, res) => {
   try {
     console.log("--- DEBUG START ---");
@@ -33,7 +33,7 @@ export const getAllUsers = async (req, res) => {
   }
 };
 
-
+// GET ME - Dati utente autenticato
 export const getMe = async (req, res) => {
   try {
     if (!req.user) {

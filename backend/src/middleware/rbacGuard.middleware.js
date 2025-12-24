@@ -20,15 +20,17 @@ export default async function rbacGuard(req, res, next) {
       });
     }
 
-    // Chiamata al proxy (me stesso), non al server interno
-    // Questo perché tutte le chiamate che passano per /rbac/decide passeranno per internalProxy (vedi proxyApp.js in fondo)
-    const response = await fetch("http://localhost:5000/rbac/decide", {
+    // qua il proxy deve chiedere al PDP se l'utente ha il permesso richiesto
+    // per questo chiamo la route interna del PDP che ho esposto appositamente per il proxy
+    // il suo compito è solo quello di fare da tramite tra il proxy e il PDP vero e proprio (rbacDecisionController)
+    const response = await fetch("http://localhost:4000/rbac/decide", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "x-internal-proxy": "true" 
       },
       body: JSON.stringify({
-        userId: req.user.id,
+        userId: req.user.userId,
         permission: requiredPermission
       })
     });
@@ -45,6 +47,7 @@ export default async function rbacGuard(req, res, next) {
     }
 
     // Tutto ok --> il proxy inoltra finalmente la richiesta originale al server interno tramite il reverse proxy (internalProxy).
+    // La richiesta originale (quella mandata dal client) prosegue il suo flusso normale verso il server interno.
     next();
   } catch (err) {
     console.error("RBAC Guard error:", err);

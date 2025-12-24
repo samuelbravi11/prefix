@@ -7,6 +7,7 @@ import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import dashboardRoutes from "./routes/dashboard.routes.js";
 import requestRoutes from "./routes/request.routes.js";
+import notificationRoutes from "./routes/notification.routes.js";
 
 import requestLogger from "./middleware/apiLogger.middleware.js";
 import rbacDecisionController from "./controllers/rbacDecision.controller.js";
@@ -17,7 +18,8 @@ const app = express();
 // CORS 
 app.use(cors({
   origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
-  credentials: true
+  credentials: true,
+  exposedHeaders: ['set-cookie'] // Permetti al frontend di vedere i cookie
 }));
 
 //DEBUG MIDDLEWARE
@@ -54,6 +56,7 @@ app.use(cookieParser());
 app.use(requestLogger);
 
 
+
 /* --------------------------------------------------
    ROUTES --> accessibili solo via proxy
 -------------------------------------------------- */
@@ -65,14 +68,15 @@ app.use("/auth", authRoutes);
 app.use("/api/v1/users", userRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);
 app.use("/api/v1/requests", requestRoutes);
+app.use("/api/v1/notifications", notificationRoutes);
 
 
 /* PDP decision
-   Il rbacDecisionController verifica solo se l’utente possiede il permesso richiesto e restituisce una decisione (PERMIT o DENY).
-   Tutte le richieste che richiedono autorizzazione passano prima dal proxy, dove il PEP (rbacGuard) traduce la richiesta HTTP in una permission e chiede la decisione al PDP tramite /rbac/decide.
-   
-   Se la decisione è PERMIT, il PEP inoltra la richiesta originale al server interno sulla route corretta.
-   Se è DENY, la richiesta viene bloccata e l’API non viene mai eseguita.
+  Il rbacDecisionController verifica solo se l’utente possiede il permesso richiesto e restituisce una decisione (PERMIT o DENY).
+  Tutte le richieste che richiedono autorizzazione passano prima dal proxy, dove il PEP (rbacGuard) traduce la richiesta HTTP in una permission e chiede la decisione al PDP tramite /rbac/decide.
+  
+  Se la decisione è PERMIT, il PEP inoltra la richiesta originale al server interno sulla route corretta.
+  Se è DENY, la richiesta viene bloccata e l’API non viene mai eseguita.
 */
 app.post("/rbac/decide", rbacDecisionController);
 

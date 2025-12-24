@@ -1,4 +1,4 @@
-import { generateAccessToken, generateRefreshToken } from "../services/token.service.js";
+import { generateAccessToken, generateRefreshToken, verifyAccessToken, verifyRefreshToken } from "../services/token.service.js";
 import userService from "../services/user.service.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
@@ -11,9 +11,9 @@ function setRefreshTokenCookie(res, refreshToken) {
   res.cookie("refreshToken", refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax", // meglio in sviluppo
-    path: "/auth/refresh",
-    maxAge: 30 * 24 * 60 * 60 * 1000
+    sameSite: "lax",
+    path: "/",
+    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 giorni
   });
 }
 
@@ -88,9 +88,6 @@ export async function login(req, res) {
       return res.status(401).json({ message: "Credenziali errate" });
     }
 
-    /* ---------------------------------------------
-       BLOCCO PER STATUS (OBBLIGATORIO)
-    --------------------------------------------- */
     if (user.status !== "active") {
       await AuditLog.create({
         entityType: "AUTH",
@@ -105,12 +102,12 @@ export async function login(req, res) {
       });
     }
 
-    /* ---------------------------------------------
-       TOKEN MINIMALISTA
-       (RBAC lo fa la Guard)
-    --------------------------------------------- */
-    const payload = { userId: user._id };
+    const payload = {
+      userId: user._id.toString(),
+      status: user.status
+    };
 
+    // USA LE FUNZIONI CORRETTE
     const accessToken = await generateAccessToken(payload);
     const refreshToken = await generateRefreshToken(payload);
 
@@ -153,9 +150,10 @@ export async function refresh(req, res) {
 
     let payload;
     try {
-      payload = jwt.verify(refreshToken, process.env.JWT_SECRET);
-    } catch {
-      return res.status(401).json({ message: "Refresh token non valido" });
+      payload = await verifyRefreshToken(refreshToken);
+    } catch (error) {
+      console.error("Errore verifica refresh token:", error);
+      return res.status(401).json({ message: "Refresh token non valido o scaduto" });
     }
 
     const user = await User.findById(payload.userId);
@@ -163,8 +161,12 @@ export async function refresh(req, res) {
       return res.status(403).json({ message: "Account non valido" });
     }
 
-    const newRefreshToken = await generateRefreshToken({ userId: user._id });
+    const userId = user._id.toString();
+    
+    // Genera nuovo refresh token
+    const newRefreshToken = await generateRefreshToken({ userId });
 
+    // Ruota i token
     const rotated = await userService.rotateRefreshToken(
       user._id,
       refreshToken,
@@ -178,7 +180,13 @@ export async function refresh(req, res) {
       });
     }
 
-    const newAccessToken = await generateAccessToken({ userId: user._id });
+    // Genera nuovo access token CON STATUS
+    const newAccessToken = await generateAccessToken({ 
+      userId,
+      status: user.status  // <-- IMPORTANTE: Includi lo status
+    });
+    
+    // Imposta il nuovo refresh token nel cookie
     setRefreshTokenCookie(res, newRefreshToken);
 
     await AuditLog.create({
@@ -188,7 +196,9 @@ export async function refresh(req, res) {
       byUser: user._id
     });
 
-    return res.json({ accessToken: newAccessToken });
+    return res.json({ 
+      accessToken: newAccessToken 
+    });
 
   } catch (err) {
     console.error("Errore refresh token:", err);
@@ -219,11 +229,12 @@ export async function logout(req, res) {
       { $pull: { "auth.refreshTokens": { tokenHash } } }
     );
 
-    // cancella cookie
+    // cancella cookie - USA LO STESSO PATH DEL LOGIN!
     res.clearCookie("refreshToken", {
       httpOnly: true,
-      sameSite: "strict",
-      secure: process.env.NODE_ENV === "production"
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/"
     });
 
     return res.json({ message: "Logout successful" });
@@ -233,3 +244,72 @@ export async function logout(req, res) {
     return res.status(500).json({ message: "Logout failed" });
   }
 }
+
+/* ===================================================
+   ME
+=================================================== */
+export const me = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ message: "Non autenticato" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    
+    // USO LA FUNZIONE CORRETTA DAL token.service.js
+    const payload = await verifyAccessToken(token);
+    
+    // DEBUG: log del payload
+    console.log("[AUTH/ME] Payload dal token:", payload);
+    
+    // Recupera utente dal DB
+    const user = await User.findById(payload.userId)
+      .select("_id name surname email roles status buildingId createdAt updatedAt")
+      .populate("roles", "roleName");
+
+    if (!user) {
+      console.log("[AUTH/ME] Utente non trovato per ID:", payload.userId);
+      return res.status(404).json({ message: "Utente non trovato" });
+    }
+
+    // DEBUG: log dello status
+    console.log("[AUTH/ME] Status utente dal DB:", user.status);
+    console.log("[AUTH/ME] Utente completo:", user);
+
+    // Verifica che l'utente sia attivo (usa "active" minuscolo!)
+    if (user.status !== "active") {
+      console.log("[AUTH/ME] Utente non attivo. Status:", user.status);
+      return res.status(403).json({ 
+        message: "Utente non attivo",
+        status: user.status 
+      });
+    }
+
+    // Restituisci i dati dell'utente
+    const responseData = {
+      _id: user._id,
+      email: user.email,
+      name: user.name,
+      surname: user.surname,
+      roles: user.roles,
+      status: user.status,
+      buildingId: user.buildingId,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    };
+    
+    console.log("[AUTH/ME] Risposta:", responseData);
+    return res.json(responseData);
+
+  } catch (err) {
+    console.error("Errore in /auth/me:", err);
+    
+    if (err.message === "Access token invalido o scaduto") {
+      return res.status(401).json({ message: "Token non valido o scaduto" });
+    }
+    
+    return res.status(500).json({ message: "Errore interno del server" });
+  }
+};

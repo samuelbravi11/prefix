@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import connectDB from "./config/db.js";
+import { startScheduler } from './scheduler/scheduler.js'
 
 // Carica variabili ambiente --> salvate in memoria ram per tutta l'esecuzione del server
 dotenv.config({ path: new URL("../.env", import.meta.url).pathname });
@@ -21,6 +22,8 @@ async function startServer() {
     app.listen(PORT, "127.0.0.1", () => {
       console.log(`Server interno attivo su 127.0.0.1:${PORT}`);
       console.log(`DB in uso: ${process.env.DB_NAME}`);
+      // Avvio lo scheduler solo una volta --> vive dentro il server interno decisionale
+      startScheduler();
     });
 
   } catch (err) {

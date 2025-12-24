@@ -7,6 +7,7 @@ import { verifyAccessToken } from "../services/token.service.js";
 */
 async function requireAuth(req, res, next) {
   try {
+    console.log("\nHEADER:", req.headers.authorization);
     const header = req.headers.authorization;
 
     if (!header || !header.startsWith("Bearer ")) {
