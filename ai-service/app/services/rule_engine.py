@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
-from app.ml.model_loader import get_rule_qa_model
+# from app.ml.model_loader import get_rule_qa_model
 
 """ Rule Engine Service
 E' il motore che valuta le regole definite per la manutenzione predittiva.
@@ -16,6 +16,7 @@ Ha il compito di:
 - decide solo questo:
   # true → regola scaduta
   # false → regola valida
+- restituisce la lista di regole scadute
 """
 
 def _parse_date(value: Optional[str]) -> Optional[datetime]:
@@ -50,20 +51,24 @@ def _frequency_to_days(value: Any, unit: Any) -> Optional[int]:
 
 def check_rules(payload: Dict) -> Dict:
     """
-    Input atteso (minimo):
+    Input atteso: (vedi rule.service.js sul backend)
     {
-      "rules": [...],
+      # ASSET
+      "asset_id": Object_id
       "lastMaintenance": "YYYY-MM-DD" | ISO datetime,
-      "now": "YYYY-MM-DD" | ISO datetime   (consigliato)
+      "now": "YYYY-MM-DD" | ISO datetime,
+
+      # REGOLE ASSOCIATE ALL'ASSET
+      "rules": [...]
     }
 
-    Output standard:
+    Output standard: (vedi return sotto)
     {
       "shouldCreateEvent": bool,
       "reason": "...",
       "explanation": "...",
+      "dueRuleIds": "...",
       "suggestedWindowDays": int,
-      "matchedRuleId": "..."
     }
     """
     rules: List[Dict] = payload.get("rules") or []
@@ -77,17 +82,20 @@ def check_rules(payload: Dict) -> Dict:
     if not last_maint:
         return {
             "shouldCreateEvent": False,
-            "reason": "MISSING_LAST_MAINTENANCE",
-            "explanation": "lastMaintenance mancante o non parsabile"
+            "reason": "missing_last_maintenance",
+            "explanation": "lastMaintenance mancante per asset o asset group"
         }
+
 
     elapsed_days = (now - last_maint).days
 
     # Costruisco tabella "ricca" per TAPAS
     table_rows = []
     for r in rules:
-        rid = r.get("rule_id") or r.get("id") or r.get("_id") or "UNKNOWN"
-        freq = r.get("frequency", {})
+        rid = r.get("rule_id")
+        if not rid:
+            continue
+        freq = r.get("frequency") or {}
         # supporto sia {value, unit} sia frequency_value/frequency_unit
         f_val = freq.get("value", r.get("frequency_value"))
         f_unit = freq.get("unit", r.get("frequency_unit"))
@@ -109,6 +117,36 @@ def check_rules(payload: Dict) -> Dict:
 
     df = pd.DataFrame(table_rows)
 
+
+
+
+
+    # PATCH --> gestione logica per controllo regolistico
+    if df.empty or "is_due" not in df.columns:
+        return {"shouldCreateEvent": False}
+
+    due_df = df[df["is_due"] == "YES"]
+
+    if due_df.empty:
+        return {"shouldCreateEvent": False}
+
+    due_rule_ids = due_df["rule_id"].tolist()
+
+    # OUTPUT
+    return {
+        "shouldCreateEvent": True,
+        "reason": "multiple_rules_due",
+        "explanation": f"{len(due_rule_ids)} regole risultano scadute",
+        "dueRuleIds": due_rule_ids,
+        "suggestedWindowDays": 7
+    }
+
+
+""" VERSIONE CON TAPAS (AI) --> ORA GESTITA CON LA LOGICA
+# Abbiamo deciso di lasciare la logica del controllo regole sul servizio python e non sul backend
+# per eventuali trasformazioni future nel codice.
+# Ad esempio se per un bene, non vengono soddisfatte una serie di regole, potrebbe entrare in gioco l'AI per scegliere un ordine di priorità tra regole
+
     # Domanda a TAPAS: quale regola è dovuta?
     qa = get_rule_qa_model()
     question = "Which rule_id is due?"
@@ -125,9 +163,9 @@ def check_rules(payload: Dict) -> Dict:
         matched = due.iloc[0]["rule_id"]
         return {
             "shouldCreateEvent": True,
-            "reason": "RULE_DUE_FALLBACK",
+            "reason": "rule_due_fallback",
             "explanation": "Fallback deterministico (TAPAS error)",
-            "suggestedWindowDays": 7,
+            "suggestedWindowDays": None,
             "matchedRuleId": matched
         }
 
@@ -143,7 +181,7 @@ def check_rules(payload: Dict) -> Dict:
         if row["is_due"] == "YES":
             return {
                 "shouldCreateEvent": True,
-                "reason": "RULE_DUE",
+                "reason": "rule_due",
                 "explanation": f"TAPAS: regola {matched_rule_id} dovuta",
                 "suggestedWindowDays": 7,
                 "matchedRuleId": matched_rule_id
@@ -151,3 +189,4 @@ def check_rules(payload: Dict) -> Dict:
 
     # Se TAPAS non è convincente, niente evento
     return {"shouldCreateEvent": False}
+"""

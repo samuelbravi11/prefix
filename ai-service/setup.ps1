@@ -88,7 +88,7 @@ Write-Success "Ambiente virtuale creato in .venv\"
 # ========== 4. ATTIVAZIONE AMBIENTE ==========
 Write-Info "Attivazione ambiente virtuale..."
 
-$activateScript = ".\venv\Scripts\Activate.ps1"
+$activateScript = ".\.venv\Scripts\Activate.ps1"
 if (-not (Test-Path $activateScript)) {
     Write-Error "File di attivazione non trovato: $activateScript"
 }
@@ -203,7 +203,7 @@ if ($packageCount -gt 25) {
 }
 Write-Host ""
 Write-Host "📝 COMANDI UTILI:" -ForegroundColor Yellow
-Write-Host "   Attiva ambiente:    .\venv\Scripts\Activate.ps1" -ForegroundColor Green
+Write-Host "   Attiva ambiente:    .\.venv\Scripts\Activate.ps1" -ForegroundColor Green
 Write-Host "   Disattiva:          deactivate" -ForegroundColor Green
 Write-Host "   Aggiorna dipendenze:pip install -r requirements.txt" -ForegroundColor Green
 Write-Host "   Aggiungi dipendenza:pip install <package> && pip freeze > requirements.txt" -ForegroundColor Green
