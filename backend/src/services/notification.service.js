@@ -1,4 +1,5 @@
-import db from "../config/db.js";
+import Notification from "../models/Notification.js";
+
 /*  NOTIFICATION SERVICE PDP
   Il notification service ha il compito di:
   - riceve eventi di dominio (event.service.js, come la creazione di un evento di manutenzione);
@@ -14,7 +15,7 @@ export const notifyEvent = async ({ type, event }) => {
   let notification;
   
   switch (type) {
-    case "MAINTENANCE_CREATED":
+    case "maintenance_created":
       notification = buildMaintenanceNotification(event);
       break;
 
@@ -23,7 +24,7 @@ export const notifyEvent = async ({ type, event }) => {
   }
   
   // Persistenza DB --> inserisco notifica nel DB così l'utente può visualizzarla in futuro dopo il login e quindi la creazione socket
-  await db.notifications.insert(notification);
+  await Notification.create(notification);
 
   // Invio evento al Proxy Server (WebSocket Gateway) --> mando evento in realtime per l'utente online in base a userId/role/buildingId
   // Chiama la route interna protetta /internal/events del proxy che si occupa di emettere l'evento WS verso i client connessi in base a userId/role/buildingId (rooms)
@@ -44,7 +45,7 @@ function buildMaintenanceNotification(event, targetUserId = null) {
     type: "CREAZIONE_INTERVENTO",
     title: "Nuovo intervento pianificato",
     message: `È stato pianificato un intervento di manutenzione`,
-    priority: "alta",
+    priority: "high",
     // Se targetUserId è fornito, notifica specifica
     recipient: targetUserId ? {
       userId: targetUserId,

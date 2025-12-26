@@ -57,8 +57,8 @@ const NotificationSchema = new mongoose.Schema(
 
     priority: {
       type: String,
-      enum: ["NORMAL", "HIGH", "CRITICAL"],
-      default: "NORMAL"
+      enum: ["low", "medium", "high"],
+      default: "medium"
     },
 
     readBy: [{

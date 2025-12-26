@@ -2,7 +2,7 @@ import Asset from "../models/Asset.js";
 
 // Recupera tutti i beni attivi
 export async function getAllActiveAssets() {
-  return Asset.find({ active: true });
+  return Asset.find({ isActive: true });
 }
 
 // Aggiorna ultimo controllo regolistico
