@@ -1,6 +1,6 @@
 // Header usato per identificare le richieste provenienti ESCLUSIVAMENTE dal proxy/guard.
-export const INTERNAL_PROXY_HEADER = "x-internal-proxy";
-export const INTERNAL_PROXY_VALUE = "true";
+// export const INTERNAL_PROXY_HEADER = "x-internal-proxy";
+// export const INTERNAL_PROXY_VALUE = "true";
 
 /* Middleware da usare NEL PROXY (Guard)
   Aggiunge l’header alle richieste: x-internal-proxy: true.
@@ -22,6 +22,7 @@ export function withInternalProxyHeader(proxyReq, req, res) {
 /* Middleware da usare NEL SERVER INTERNO
   Blocca ogni accesso diretto (browser, curl, postman, ecc.)
 */
+/* --> FUNZIONE SPOSTATA SU app.js
 export function requireInternalProxy(req, res, next) {
   const internalHeader = req.headers[INTERNAL_PROXY_HEADER];
   console.log("[INTERNAL SECURITY] Header ricevuto:", internalHeader, "(atteso:", INTERNAL_PROXY_VALUE + ")");
@@ -37,3 +38,4 @@ export function requireInternalProxy(req, res, next) {
   console.log("[INTERNAL SECURITY] Accesso consentito via proxy");
   next();
 }
+*/

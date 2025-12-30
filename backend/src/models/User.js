@@ -66,6 +66,12 @@ const UserSchema = new mongoose.Schema({
     ref: "Role"
   }],
 
+  associatedBuildingIds: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Building",
+    index: true
+  }],
+
   status: {
     type: String,
     enum: ["pending", "active", "suspended", "disabled"],

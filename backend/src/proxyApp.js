@@ -7,11 +7,12 @@ import http from "http";
 import requestLogger from "./middleware/apiLogger.middleware.js";
 import requireAuth from "./middleware/authGuard.middleware.js";
 import rbacGuard from "./middleware/rbacGuard.middleware.js";
-import requireActiveUser from "./middleware/requireActiveUser.middleware.js";
+
 import { emitEvent } from "./gateway/ws.gateway.js";
+import { setupSwagger } from "./swagger/setupSwagger.js";
+
 
 const proxyApp = express();
-
 
 /*
 // DEBUG middleware per vedere tutte le richieste in arrivo
@@ -20,7 +21,6 @@ proxyApp.use("/api", (req, res, next) => {
   next();
 });
 */
-
 
 /* CORS
   intercetta TUTTE le richieste OPTIONS --> risponde subito, senza passare da: requireAuth, rbacGuard e altri middleware
@@ -40,6 +40,18 @@ proxyApp.use(cookieParser());
 // LOGGER
 proxyApp.use(requestLogger);
 
+
+/* =====================================================
+  SWAGGER UI – DOCUMENTAZIONE PUBBLICA
+  ======================================================
+  - accessibile a chiunque
+  - NON passa da auth
+  - NON passa da RBAC
+  - solo lettura documentazione
+*/
+setupSwagger(proxyApp);
+
+
 /* ROUTE PER GESTIRE LE NOTIFICHE
   Il proxy:
   - riceve la notifica dal server interno (notification.service.js)
@@ -49,6 +61,7 @@ proxyApp.use(requestLogger);
 proxyApp.post("/internal/events", (req, res) => {
   // solo il server interno può chiamare questa route, usando un particolare flag (x-internal-proxy)
   if (req.headers["x-internal-proxy"] !== "true") {
+    console.log("FORBIDDEN")
     return res.status(403).json({ message: "Forbidden" });
   }
   // Emissione evento WS
@@ -64,7 +77,7 @@ proxyApp.post("/internal/events", (req, res) => {
 // Si occupa di inoltrare la richiesta al server interno usando http.request e settando manualmente l'header x-internal-proxy
 const manualProxy = (req, res) => {
   console.log(`[MANUAL PROXY] Inoltrando richiesta: ${req.method} ${req.originalUrl}`);
-  
+
   const options = {
     hostname: '127.0.0.1',
     port: 4000,
@@ -72,10 +85,12 @@ const manualProxy = (req, res) => {
     method: req.method,
     headers: {
       ...req.headers,
+      // sigillo di fiducia
       'x-internal-proxy': 'true',
-      'x-user-id': req.user?.userId || '',
-      'host': '127.0.0.1:4000',
-      'connection': 'close'
+      // proxy passa solo id user --> sarà il server interno connesso al DB a ricostruirsi l'utente e verificare se è attivo
+      'x-user-id': req.user._id.toString(),
+      host: '127.0.0.1:4000',
+      connection: 'close',
     }
   };
   
@@ -173,7 +188,6 @@ proxyApp.use("/auth", (req, res) => {
 });
 
 
-
 /* =====================================================
    PDP (RBAC DECISION ENDPOINT) --> USATO SOLO DAL PROXY
 ===================================================== */
@@ -222,53 +236,37 @@ proxyApp.use("/rbac", (req, res) => {
 
 
 /* =====================================================
-   PROTECTED ROUTES - API V1 --> GUARDA IN FONDO
+  API PROTETTE – /api/v1/** --> GUARDA IN FONDO
 ===================================================== */
 // Tutte le rotte API protette passano da qui
 // Questo perché il proxy deve applicare la guardia RBAC prima di inoltrare la richiesta al server interno
 // Inoltre faccio passare tutte le richieste API per il proxy manuale (manualProxy) per avere un controllo completo sugli header e sul flusso di richiesta/risposta
 
 // API per users
-proxyApp.use(
-  "/api/v1/users",
-  requireAuth,
-  requireActiveUser,
-  rbacGuard,
-  manualProxy
-);
+proxyApp.use("/api/v1/users", requireAuth, rbacGuard, manualProxy);
 
 // API per dashboard
-proxyApp.use(
-  "/api/v1/dashboard",
-  requireAuth,
-  requireActiveUser,
-  rbacGuard,
-  manualProxy
-);
+proxyApp.use("/api/v1/dashboard", requireAuth, rbacGuard, manualProxy);
 
 // API per requests
-proxyApp.use(
-  "/api/v1/requests",
-  requireAuth,
-  requireActiveUser,
-  rbacGuard,
-  manualProxy
-);
+proxyApp.use("/api/v1/requests", requireAuth, rbacGuard, manualProxy);
 
 // API per notifications
-proxyApp.use(
-  "/api/v1/notifications",
-  requireAuth,
-  requireActiveUser,
-  rbacGuard,
-  (req, res, next) => {
-    console.log("[NOTIFICATIONS ROUTE] Prima del proxy manuale");
-    console.log("  User ID:", req.user?.userId);
-    console.log("  Original URL:", req.originalUrl);
-    next();
-  },
-  manualProxy
-);
+proxyApp.use("/api/v1/notifications", requireAuth, rbacGuard, manualProxy);
+
+// API per buildings
+proxyApp.use("/api/v1/buildings", requireAuth, rbacGuard, manualProxy);
+
+// API per events
+proxyApp.use("/api/v1/events", requireAuth, rbacGuard, manualProxy);
+
+// API per interventions
+proxyApp.use("/api/v1/interventions", requireAuth, rbacGuard, manualProxy);
+
+// API per calendar
+proxyApp.use("/api/v1/calendar", requireAuth, rbacGuard, manualProxy);
+
+
 
 // Route di test
 proxyApp.get("/health", (req, res) => {

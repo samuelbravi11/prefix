@@ -19,7 +19,11 @@ async function requireAuth(req, res, next) {
     // Decripta + validazione JWE
     const payload = await verifyAccessToken(token);
 
-    req.user = payload;
+    // SOLO IDENTITÀ --> niente DB, niente ruoli
+    req.user = {
+      _id: payload.userId,
+    };
+
     return next();
   } catch (error) {
     console.error("ERRORE AUTH:", error);

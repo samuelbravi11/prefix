@@ -8,10 +8,15 @@ import userRoutes from "./routes/user.routes.js";
 import dashboardRoutes from "./routes/dashboard.routes.js";
 import requestRoutes from "./routes/request.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
+import buildingRoutes from "./routes/building.routes.js"
+import eventRoutes from "./routes/event.routes.js";
+import interventionRoutes from "./routes/intervention.routes.js";
+import calendarRoutes from "./routes/calendar.routes.js";
 
 import requestLogger from "./middleware/apiLogger.middleware.js";
 import rbacDecisionController from "./controllers/rbacDecision.controller.js";
-import { requireInternalProxy } from "./internalProxySecurity.js";
+import requireActiveUser from "./middleware/requireActiveUser.middleware.js";
+
 
 const app = express();
 
@@ -36,16 +41,23 @@ app.use((req, res, next) => {
 
 // BLOCCO ACCESSI DIRETTI
 app.use((req, res, next) => {
-   // DEBUG
-  console.log("[INTERNAL DEBUG] PATH:", req.path);
-  console.log("[INTERNAL DEBUG] ORIGINAL URL:", req.originalUrl);
-  console.log("[INTERNAL DEBUG] BASE URL:", req.baseUrl);
-  
-  // Consenti healthcheck e root (opzionale)
+  // Consenti root e health
   if (req.path === "/" || req.path === "/health") {
     return next();
   }
-  return requireInternalProxy(req, res, next);
+
+  // Header di fiducia
+  if (req.headers["x-internal-proxy"] !== "true") {
+    return res.status(403).json({ error: "Direct access forbidden" });
+  }
+
+  // Il proxy passa solo l'id utente
+  const userId = req.headers["x-user-id"];
+  if (userId) {
+    req.user = { _id: userId };
+  }
+
+  next();
 });
 
 // BODY PARSER E COOKIE
@@ -57,19 +69,11 @@ app.use(requestLogger);
 
 
 
-/* --------------------------------------------------
-   ROUTES --> accessibili solo via proxy
--------------------------------------------------- */
-
+/* ----------------------------------------------------------------------
+   ROUTES PUBBLICHE --> accessibili solo via proxy (NO requireActiveUser)
+---------------------------------------------------------------------- */
 // Auth
 app.use("/auth", authRoutes);
-
-// API (protette dalla Guard)
-app.use("/api/v1/users", userRoutes);
-app.use("/api/v1/dashboard", dashboardRoutes);
-app.use("/api/v1/requests", requestRoutes);
-app.use("/api/v1/notifications", notificationRoutes);
-
 
 /* PDP decision
   Il rbacDecisionController verifica solo se l’utente possiede il permesso richiesto e restituisce una decisione (PERMIT o DENY).
@@ -88,5 +92,35 @@ app.get("/", (req, res) => {
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "sono vivo" });
 });
+
+
+
+/* ------------- requireActiveUser -------------
+  tutto quello che segue richiede utente attivo
+--------------------------------------------- */
+app.use(requireActiveUser);
+
+app.use((req, res, next) => {
+  if (!req.user || !req.user.status || !req.user.buildingIds) {
+    return res.status(500).json({
+      message: "User context not initialized correctly"
+    });
+  }
+  next();
+});
+
+
+/* ---------------------------------------------------
+   API PROTETTE (Guard) --> accessibili solo via proxy
+--------------------------------------------------- */
+app.use("/api/v1/users", userRoutes);
+app.use("/api/v1/dashboard", dashboardRoutes);
+app.use("/api/v1/requests", requestRoutes);
+app.use("/api/v1/notifications", notificationRoutes);
+app.use("/api/v1/buildings", buildingRoutes);
+app.use("/api/v1/events", eventRoutes);
+app.use("/api/v1/interventions", interventionRoutes);
+app.use("/api/v1/calendar", calendarRoutes);
+
 
 export default app;

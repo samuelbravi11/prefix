@@ -1,10 +1,17 @@
 // middleware/rbacGuard.js
-import { PERMISSION_MAP } from "../permissions.map.js";
+import { PERMISSION_MAP } from "../config/permissions.map.js";
 import { normalizePath } from "../utils/normalizePath.js";
 
 // MIDDLEWARE DI PEP
 export default async function rbacGuard(req, res, next) {
   try {
+    console.log("[RBAC GUARD]", {
+      method: req.method,
+      baseUrl: req.baseUrl,
+      path: req.path,
+      normalized: normalizePath(req.baseUrl + req.path),
+    });
+
     // Estrai informazioni dalla richiesta
     const method = req.method;
     const normalizedPath = normalizePath(req.baseUrl + req.path);
@@ -16,9 +23,11 @@ export default async function rbacGuard(req, res, next) {
     if (!requiredPermission) {
       return res.status(403).json({
         message: "Permission not mapped",
-        detail: permissionKey
+        route: `${method} ${normalizedPath}`,
+        hint: "Aggiungi questa route in PERMISSION_MAP oppure correggi normalizePath"
       });
     }
+
 
     // qua il proxy deve chiedere al PDP se l'utente ha il permesso richiesto
     // per questo chiamo la route interna del PDP che ho esposto appositamente per il proxy
@@ -30,7 +39,7 @@ export default async function rbacGuard(req, res, next) {
         "x-internal-proxy": "true" 
       },
       body: JSON.stringify({
-        userId: req.user.userId,
+        userId: req.user._id,
         permission: requiredPermission
       })
     });
@@ -41,10 +50,13 @@ export default async function rbacGuard(req, res, next) {
     // Se PDP nega, blocca la richiesta
     if (!decision.allow) {
       return res.status(403).json({
-        message: "Forbidden",
-        reason: decision.reason
+        message: "Permesso mancante",
+        requiredPermission,
+        route: `${req.method} ${normalizedPath}`,
+        detail: decision.reason || "Permission denied by PDP"
       });
     }
+
 
     // Tutto ok --> il proxy inoltra finalmente la richiesta originale al server interno tramite il reverse proxy (internalProxy).
     // La richiesta originale (quella mandata dal client) prosegue il suo flusso normale verso il server interno.

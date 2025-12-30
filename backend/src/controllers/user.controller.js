@@ -36,12 +36,13 @@ export const getAllUsers = async (req, res) => {
 // GET ME - Dati utente autenticato
 export const getMe = async (req, res) => {
   try {
-    if (!req.user) {
+    if (!req.user?._id) {
       return res.status(401).json({ message: "Non autenticato" });
     }
 
-    // opzionale — qui potresti fare query db per dati aggiornati
-    const user = await User.findById(req.user.id).select("-auth.passwordHash");
+    const user = await User.findById(req.user._id)
+      .select("-auth.passwordHash")
+      .populate("roles", "roleName");
 
     if (!user) {
       return res.status(404).json({ message: "Utente non trovato" });
@@ -50,15 +51,37 @@ export const getMe = async (req, res) => {
     return res.json({
       success: true,
       user: {
-        id: user._id,
+        _id: user._id,
         name: user.name,
         surname: user.surname,
         email: user.email,
-        role: user.role,
+        roleIds: user.roles.map(r => r._id),
+        roles: user.roles,
+        status: user.status,
+        buildingIds: user.associatedBuildingIds || [],
       },
     });
   } catch (err) {
     console.error("Errore in getMe:", err);
     return res.status(500).json({ message: "Errore interno" });
+  }
+};
+
+/*
+  Restituisce gli utenti con stato PENDING
+  Usato da Admin Centrale per approvazione
+*/
+export const getPendingUsers = async (req, res) => {
+  try {
+    const users = await User.find({
+      status: "PENDING",
+    }).lean();
+
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({
+      message: "Errore nel recupero utenti pending",
+      error: err.message,
+    });
   }
 };

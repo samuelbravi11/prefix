@@ -108,7 +108,11 @@ export default async function rbacDecisionController(req, res) {
       details: { permission, reason: allow ? "Permission granted" : "Permission denied", roles }
     });
 
-    return res.json({ allow: allow ? true : false });
+    return res.json({
+      allow,
+      reason: allow ? "Permission granted" : "User lacks required permission",
+      permission
+    });
 
   } catch (err) {
     console.error("PDP decision error:", err);

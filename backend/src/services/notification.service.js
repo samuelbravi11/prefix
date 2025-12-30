@@ -1,4 +1,5 @@
 import Notification from "../models/Notification.js";
+import { resolveUserByRoleAndBuilding } from "../utils/notification.js";
 
 /*  NOTIFICATION SERVICE PDP
   Il notification service ha il compito di:
@@ -15,9 +16,15 @@ export const notifyEvent = async ({ type, event }) => {
   let notification;
   
   switch (type) {
-    case "maintenance_created":
-      notification = buildMaintenanceNotification(event);
+    case "maintenance_created": {
+      const targetUserId = await resolveUserByRoleAndBuilding({
+        roleName: "admin_locale",
+        buildingId: event.buildingId
+      });
+
+      notification = buildMaintenanceNotification(event, targetUserId);
       break;
+    }
 
     default:
       return;
@@ -26,16 +33,25 @@ export const notifyEvent = async ({ type, event }) => {
   // Persistenza DB --> inserisco notifica nel DB così l'utente può visualizzarla in futuro dopo il login e quindi la creazione socket
   await Notification.create(notification);
 
+  console.log("\n\n\nINVIO CHIAMATA AL PROXY: /internal/events", notification, "\n\n\n");
+
   // Invio evento al Proxy Server (WebSocket Gateway) --> mando evento in realtime per l'utente online in base a userId/role/buildingId
   // Chiama la route interna protetta /internal/events del proxy che si occupa di emettere l'evento WS verso i client connessi in base a userId/role/buildingId (rooms)
-  await fetch(`${process.env.PROXY_INTERNAL_URL}/internal/events`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-internal-proxy": "true"
-    },
-    body: JSON.stringify(notification)
-  });
+  try {
+    const res = await fetch(`${process.env.PROXY_INTERNAL_URL}/internal/events`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-proxy": "true"
+      },
+      body: JSON.stringify(notification)
+    });
+
+    console.log("[notifyEvent] proxy status:", res.status);
+  } catch (err) {
+    console.error("[notifyEvent] proxy error:", err);
+  }
+
 };
 
 // Costruisce la notifica di creazione intervento manutenzione
@@ -46,14 +62,14 @@ function buildMaintenanceNotification(event, targetUserId = null) {
     title: "Nuovo intervento pianificato",
     message: `È stato pianificato un intervento di manutenzione`,
     priority: "high",
-    // Se targetUserId è fornito, notifica specifica
-    recipient: targetUserId ? {
-      userId: targetUserId,
-      role: null
-    } : null,
-    // Altrimenti notifica per ruolo
-    targetRole: "admin_locale",
+
+    recipient: targetUserId
+      ? { userId: targetUserId, role: null }
+      : null,
+
+    targetRole: targetUserId ? null : "admin_locale",
     targetBuildingId: event.buildingId ?? null,
+
     relatedEventId: event.id,
     createdAt: new Date(),
     read: false,

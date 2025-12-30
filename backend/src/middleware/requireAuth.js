@@ -1,5 +1,4 @@
-// src/middlewares/requireAuth.js
-
+/*
 import { verifyAccessToken } from "../services/token.service.js";
 
 
@@ -25,3 +24,4 @@ async function requireAuth(req, res, next) {
 }
 
 export default requireAuth;
+*/

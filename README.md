@@ -1,303 +1,230 @@
-# PreFix!
-
+# PreFix
 
 Progetto sviluppato per il corso di **Ingegneria del Software**.
 
+**PreFix** è una piattaforma composta da più servizi indipendenti che collaborano tra loro:
+- un **frontend web**
+- un **backend Node.js**, suddiviso in *server interno* e *proxy*
+- un **AI Service** in Python basato su FastAPI
 
-PreFix è composto da più servizi (frontend, backend e AI service) che devono essere avviati separatamente.
-
+Ogni servizio deve essere avviato separatamente e in un ordine preciso.
 
 ---
 
+## Architettura generale
 
-## Avvio dei servizi
-
-
-### Backend (Proxy)
-Percorso: `/backend`
-
-
-```bash
-npm run start_proxy
-
-
-### Backend (Server)
-
-
-Percorso: `/backend`
-
-
-```bash
-npm run start_local
 ```
 
+Frontend (Vite)
+↓
+Proxy (Node.js – RBAC / access control)
+↓
+Server interno (Node.js – decision engine)
+↓
+AI Service (Python – FastAPI, ML inference)
 
-### Frontend (Vite)
-
-
-Percorso: `/frontend`
-
-
-```bash
-npm run dev
 ```
 
+---
 
-### AI Service (FastAPI)
+## Prerequisiti
 
+Prima di avviare il progetto assicurarsi di avere installato:
 
-Percorso: `/ai-service`
+### Software richiesto
 
+- **Node.js 18+**
+  https://nodejs.org/
 
-```bash
-python -m uvicorn app.main:app --reload
+- **Python 3.10.x** (consigliata l’ultima micro-release 3.10)
+  https://www.python.org/downloads/release/python-3100/
+
+> ⚠️ Versioni diverse di Python potrebbero causare incompatibilità con alcune librerie ML.
+
+---
+
+## Struttura del progetto
+
 ```
 
+prefix/
+├── frontend/        # Frontend Vite
+├── backend/         # Backend Node.js (proxy + server interno)
+└── ai-service/      # AI Service Python (FastAPI)
+
+```
 
 ---
 
+## AI Service (Python – FastAPI)
 
-## Primo avvio del servizio Python (AI)
-
-
-Al **primo avvio** del servizio FastAPI:
-
-
-* FastAPI viene avviato
-* Il file `model_loader.py` viene importato
-* Hugging Face scarica i modelli necessari:
-
-
-  * **TAPAS** (~300 MB)
-  * **DistilBERT** (~250 MB)
-
-
-### Cache e memoria
-
-
-* I modelli vengono salvati in cache locale
-* Occupazione RAM stimata: **~1–1.5 GB**
-
-
----
-
-
-## Avvii successivi
-
-
-* Nessun download dei modelli
-* I modelli vengono caricati dalla cache
-* Avvio più rapido
-
-
----
-
-
-## Setup ambiente virtuale Python
-
-
-### Prerequisiti
-
-
-* **Python 3.10+ (ultima micro-release 3.10.x stabile)**
-  [https://www.python.org/downloads/release/python-3100/](https://www.python.org/downloads/release/python-3100/)
-
+### Setup ambiente Python (manuale)
 
 Tutti i comandi vanno eseguiti dalla cartella:
 
-
 ```bash
-prefix/ai-service
-```
-
-
----
-
-
-## Avvio automatico (tramite setup)
-
-
-Questa modalità utilizza gli script di setup presenti nel progetto e **configura automaticamente**:
-
-
-* ambiente virtuale Python
-* aggiornamento di pip
-* installazione delle dipendenze
-* configurazione iniziale dell’ambiente
-
-
-### Linux / macOS
-
-
-```bash
-git pull
 cd prefix/ai-service
-chmod +x setup.sh
-./setup.sh
-```
+````
 
-
-### Windows
-
-
-Aprire **PowerShell come Amministratore**:
-
-
-```powershell
-git pull
-cd prefix/ai-service
-Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
-.\setup.ps1
-```
-
-
-Dopo il setup automatico, installare PyTorch (CPU):
-
+Crea l’ambiente virtuale:
 
 ```bash
-python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+python -m venv .venv
 ```
 
-
-Attivare l’ambiente virtuale:
-
+Attiva l’ambiente virtuale:
 
 ```bash
 # Linux / macOS
 source .venv/bin/activate
 
-
-# Windows
+# Windows (PowerShell)
 .\.venv\Scripts\Activate.ps1
 ```
 
-
----
-
-
-## Avvio manuale (passo-passo)
-
-
-Questa modalità permette di configurare l’ambiente **senza usare gli script di setup**.
-
-
----
-
-
-### Linux / macOS
-
-
-```bash
-git pull
-cd prefix/ai-service
-```
-
-
-Crea l’ambiente virtuale:
-
-
-```bash
-python3 -m venv .venv
-```
-
-
-Attiva l’ambiente virtuale:
-
-
-```bash
-source .venv/bin/activate
-```
-
-
 Aggiorna pip:
-
 
 ```bash
 python -m pip install --upgrade pip
 ```
 
-
 Installa le dipendenze:
-
 
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-
 Installa PyTorch (CPU):
-
 
 ```bash
 python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
 ```
 
+---
+
+### Primo avvio dell’AI Service
+
+Al **primo avvio**:
+
+* FastAPI viene avviato
+* il file `model_loader.py` viene importato
+* Hugging Face scarica i modelli necessari
+
+Modelli scaricati:
+
+* **DistilBERT** (predizione testuale)
+* eventuali modelli futuri (regressione, ecc.)
+
+I modelli vengono salvati nella cache locale di Hugging Face
+Occupazione RAM stimata: **~1–1.5 GB**
 
 ---
 
+### Avvio AI Service
 
-### Windows
+Con l’ambiente virtuale attivo:
 
-
-```powershell
-git pull
-cd prefix/ai-service
+```bash
+python -m uvicorn app.main:app --reload
 ```
 
+Il servizio sarà disponibile su:
 
-Crea l’ambiente virtuale:
-
-
-```powershell
-python -m venv .venv
 ```
-
-
-Se necessario, abilita l’esecuzione degli script (solo per la sessione corrente):
-
-
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
+http://localhost:8000
 ```
-
-
-Attiva l’ambiente virtuale:
-
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-
-Aggiorna pip:
-
-
-```powershell
-python -m pip install --upgrade pip
-```
-
-
-Installa le dipendenze:
-
-
-```powershell
-python -m pip install -r requirements.txt
-```
-
-
-Installa PyTorch (CPU):
-
-
-```powershell
-python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-```
-
 
 ---
 
+## Backend (Node.js)
 
-## Verifica del corretto funzionamento
+Tutti i comandi vanno eseguiti dalla cartella:
 
+```bash
+cd prefix/backend
+```
+
+Installazione dipendenze (una sola volta):
+
+```bash
+npm install
+```
+
+---
+
+### Avvio server interno (Decision Server)
+
+Avvia il server che contiene:
+
+* scheduler
+* business logic
+* DB access
+* comunicazione con l’AI Service
+
+```bash
+npm run start_local
+```
+
+---
+
+### Avvio proxy (RBAC / access control)
+
+Avvia il proxy che:
+
+* gestisce l’accesso dei client
+* applica RBAC
+* inoltra le richieste al server interno
+
+```bash
+npm run start_proxy
+```
+
+---
+
+## Frontend (Vite)
+
+Tutti i comandi vanno eseguiti dalla cartella:
+
+```bash
+cd prefix/frontend
+```
+
+Installazione dipendenze (una sola volta):
+
+```bash
+npm install
+```
+
+Avvio frontend:
+
+```bash
+npm run dev
+```
+
+Il frontend sarà disponibile su:
+
+```
+http://localhost:5173
+```
+
+---
+
+## Ordine corretto di avvio dei servizi
+
+⚠️ **È fondamentale rispettare questo ordine**:
+
+1. **AI Service (Python – FastAPI)**
+2. **Backend – Server interno**
+3. **Backend – Proxy**
+4. **Frontend**
+
+Avviare i servizi in ordine diverso può causare errori di connessione.
+
+---
+
+## Verifica ambiente Python
+
+Con l’ambiente virtuale attivo, esegui questo comando:
 
 ```bash
 python - <<EOF
@@ -307,54 +234,22 @@ print("CUDA available:", torch.cuda.is_available())
 EOF
 ```
 
-
 Output atteso:
-
 
 ```text
 CUDA available: False
 ```
 
-
-Se il risultato è questo, l’ambiente è configurato correttamente.
-
+Se l’output è questo, l’ambiente Python è configurato correttamente.
 
 ---
 
+## Note finali
 
-## Gestione delle dipendenze Python
-
-
-Installare sempre le dipendenze con:
-
-
-```bash
-python -m pip install -r requirements.txt
-```
-
-
-Per installare manualmente un pacchetto:
-
-
-```bash
-python -m pip install <nome-pacchetto>
-```
-
-
-**Nota importante:**
-Usare `python -m pip` evita che i pacchetti vengano installati su un Python diverso da quello dell’ambiente virtuale.
-
+* da vedere..
 
 ---
 
+## Sviluppi futuri
 
-## Avvio AI Service
-
-
-Con l’ambiente virtuale attivo:
-
-
-```bash
-python -m uvicorn app.main:app --reload
-```
-```
+* Per ora lasciamo la gestione della suggestionWindow (finestra temporale in cui eseguire la manutenzione, es. 7 → da fare entro 7 giorni) in questo modo, ovvero nelle regole lascio sempre una suggestionWindow di 7 giorni, dato che se scade una regola, devo fare la manutenzione il prima possibile, mentre per quanto riguarda l'IA predittiva lascio la gestione dei giorni in maniera manuale, ovvero giorni calcolati in base al rischio rottura del bene. Nel futuro, quando il dataset si amplierà, vorremo passare a un altro modello chiamato REGRESSION, che restituirà lui stesso i giorni consigliati in cui effettuare la manutenzione.
