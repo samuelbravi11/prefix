@@ -1,49 +1,133 @@
 <template>
-  <div class="container-fluid vh-100">
-    <div class="row h-100">
+  <div class="container-fluid vh-100 bg-light">
+    <div class="row h-100 g-0">
+      
       <!-- Colonna sinistra: Login -->
-
-      <div class="col-md-9 d-flex flex-column vh-100">
-        <!-- Navbar in cima -->
-        <nav class="navbar navbar-expand-lg navbar-light w-100">
-          <div class="container-fluid">
-            <div>
-              <img src="../assets/images/logo.png" class="me-2" style="height: 30px" />
-              <a class="navbar-brand" href="#">PreFix</a>
-            </div>
-            <div class="d-flex">
-              <p class="mt-3">
-                Non hai un account?
-                <router-link to="/register">Registrati</router-link>
-              </p>
-            </div>
+      <div class="col-md-9 d-flex flex-column h-100">
+        
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center p-4 border-bottom">
+          <div class="d-flex align-items-center">
+            <img src="../assets/images/logo.png" class="me-3" style="height: 35px" alt="Logo" />
+            <h4 class="mb-0 text-dark fw-bold">PreFix</h4>
           </div>
-        </nav>
+          <div>
+            <span class="text-muted me-2">Non hai un account?</span>
+            <router-link to="/register" class="text-primary text-decoration-none fw-medium">
+              Registrati
+            </router-link>
+          </div>
+        </div>
 
-        <!-- Login form -->
-        <div class="d-flex justify-content-center align-items-center flex-grow-1">
-          <div class="custom-width text-center">
-            <h2 class="mb-4">Account Login</h2>
-            <p class="mb-4">Please log in to continue to your account</p>
+        <!-- Form Login -->
+        <div class="d-flex justify-content-center align-items-center flex-grow-1 p-4">
+          <div class="w-100" style="max-width: 400px">
+            
+            <!-- Titolo -->
+            <div class="text-center mb-5">
+              <h1 class="fw-bold text-dark mb-3">Accedi a PreFix</h1>
+              <p class="text-muted">Inserisci le tue credenziali per accedere</p>
+            </div>
+
+            <!-- Form -->
             <form @submit.prevent="login">
-              <div class="mb-3">
-                <input type="text" v-model="email" class="form-control" placeholder="Email" />
+              <div class="mb-4">
+                <label class="form-label fw-medium text-dark mb-2">Email</label>
+                <div class="input-group">
+                  <span class="input-group-text bg-white border-end-0">
+                    <i class="bi bi-envelope text-muted"></i>
+                  </span>
+                  <input 
+                    type="email" 
+                    v-model="email" 
+                    class="form-control border-start-0"
+                    placeholder="nome@esempio.com"
+                    required
+                  />
+                </div>
               </div>
-              <div class="mb-3">
-                <input type="password" v-model="password" class="form-control" placeholder="Password" />
+
+              <div class="mb-4">
+                <label class="form-label fw-medium text-dark mb-2">Password</label>
+                <div class="input-group">
+                  <span class="input-group-text bg-white border-end-0">
+                    <i class="bi bi-lock text-muted"></i>
+                  </span>
+                  <input 
+                    :type="showPassword ? 'text' : 'password'"
+                    v-model="password" 
+                    class="form-control border-start-0"
+                    placeholder="Inserisci la password"
+                    required
+                  />
+                  <button 
+                    type="button" 
+                    class="input-group-text bg-white border-start-0"
+                    @click="showPassword = !showPassword"
+                  >
+                    <i :class="showPassword ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
+                  </button>
+                </div>
               </div>
-              <button type="submit" class="btn btn-primary w-100">
-                Log In
+
+              <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                  
+                </div>
+                <router-link to="/forgot-password" class="text-primary text-decoration-none small">
+                  Password dimenticata?
+                </router-link>
+              </div>
+
+              <button 
+                type="submit" 
+                class="btn btn-primary w-100 py-3 fw-medium"
+                :disabled="loading"
+              >
+                <span v-if="loading">
+                  <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                  Accesso in corso...
+                </span>
+                <span v-else>
+                  <i class="bi bi-box-arrow-in-right me-2"></i>
+                  Accedi
+                </span>
               </button>
+
+              <div class="text-center my-4 position-relative">
+                <hr class="position-absolute top-50 start-0 end-0">
+                <span class="bg-light px-3 text-muted small position-relative">
+                  oppure
+                </span>
+              </div>
+
+              <button type="button" class="btn btn-outline-secondary w-100 py-2 mb-3">
+                <i class="bi bi-shield-lock me-2"></i>
+                Accedi con SPID
+              </button>
+
             </form>
           </div>
         </div>
+
+        <!-- Footer -->
+        <div class="border-top p-3 text-center">
+          <p class="text-muted small mb-0">
+            © 2024 PreFix. Tutti i diritti riservati.
+          </p>
+        </div>
       </div>
 
-      <!-- Colonna destra: Immagine -->
-      <div class="col-md-3 d-none d-md-block p-0" style="height:100vh; background-color:#1F263E;">
-        <img :src="bgImage" class="w-100 h-100" style="object-fit: contain; object-position:center;">
+      <!-- Colonna destra: Immagine (mantiene proporzioni originali) -->
+      <div class="col-md-3 d-none d-md-block p-0 bg-dark" style="height: 100vh;">
+        <img 
+          :src="bgImage" 
+          class="w-100 h-100"
+          style="object-fit: contain; object-position: center;"
+          alt="Background"
+        />
       </div>
+
     </div>
   </div>
 </template>
@@ -55,9 +139,10 @@ import { useAuthStore } from "@/stores/auth.store";
 import { login as loginService } from "@/api/authService.js";
 import bgImage from "../assets/images/login_image.jpg";
 
-
 const email = ref("");
 const password = ref("");
+const showPassword = ref(false);
+const loading = ref(false);
 const router = useRouter();
 const authStore = useAuthStore();
 
@@ -67,58 +152,16 @@ async function login() {
     return;
   }
 
+  loading.value = true;
+
   try {
-    // login --> ricevo SOLO il token
     const response = await loginService(email.value, password.value);
-    
-    console.group("=== DEBUG TOKEN FLOW ===");
-    console.log("1. Token ricevuto dal backend:");
-    console.log("   Tipo:", typeof response.data.accessToken);
-    console.log("   Lunghezza:", response.data.accessToken.length);
-    console.log("   Valore:", response.data.accessToken);
-    console.log("   Inizia con 'eyJ'?", response.data.accessToken.startsWith('eyJ'));
-    
-    // Controlla se è un JWT valido
-    const parts = response.data.accessToken.split('.');
-    console.log("   Parti JWT:", parts.length);
-    if (parts.length === 3) {
-      try {
-        const header = JSON.parse(atob(parts[0]));
-        const payload = JSON.parse(atob(parts[1]));
-        console.log("   Header:", header);
-        console.log("   Payload:", payload);
-      } catch (e) {
-        console.log("   ERRORE: Non è un JWT valido!", e);
-      }
-    }
-
-    // salva token
     localStorage.setItem("accessToken", response.data.accessToken);
-    const salvato = localStorage.getItem("accessToken");
-    // Codifica in base64 per sicurezza
-    const encodedToken = btoa(response.data.accessToken); // Solo se il token non è già base64
-    console.log("Salvato:", salvato, "Encoded:", encodedToken);
-
-    console.log("2. Token salvato in localStorage:");
-    console.log("   Tipo:", typeof salvato);
-    console.log("   Lunghezza:", salvato?.length);
-    console.log("   Valore:", salvato);
-    console.log("   Uguale all'originale?", salvato === response.data.accessToken);
-    console.groupEnd();
-
-    // recupera utente reale
     await authStore.fetchMe();
-    console.log("Auth store dopo fetchMe:", {
-      isAuthenticated: authStore.isAuthenticated,
-      user: authStore.user
-    });
-
-    // entro nel layout autenticato
     router.push("/");
-
   } catch (error) {
     console.error("Errore login:", error);
-
+    
     if (error.response?.status === 401) {
       alert("Email o password errati");
     } else if (error.response?.status === 403) {
@@ -126,6 +169,17 @@ async function login() {
     } else {
       alert("Errore durante il login");
     }
+  } finally {
+    loading.value = false;
   }
 }
 </script>
+
+<style scoped>
+/* Solo 1 regola CSS personale! */
+.bg-dark {
+  background-color: #1F263E !important;
+}
+
+/* Nessun altro CSS necessario */
+</style>

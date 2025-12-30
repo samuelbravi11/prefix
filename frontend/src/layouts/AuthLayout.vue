@@ -25,6 +25,9 @@ const router = useRouter();
 // Ref del contenitore scrollabile della dashboard
 const mainScrollContainer = ref(null);
 
+// Titolo della pagina corrente
+const currentPageTitle = ref('Dashboard')
+
 // Popup impostazioni
 const showSettings = ref(false)
 function openSettings() { showSettings.value = true }
@@ -32,7 +35,12 @@ function openSettings() { showSettings.value = true }
 const showUserData = ref(false)
 function openUserData() { showUserData.value = true }
 
-//chiama l’API /notifications --> popola lo store --> aggiorna badge e lista
+// Funzione per aggiornare il titolo della pagina
+function updatePageTitle(title) {
+  currentPageTitle.value = title
+}
+
+//chiama l'API /notifications --> popola lo store --> aggiorna badge e lista
 onMounted(async () => {
   const token = localStorage.getItem("accessToken");
 
@@ -100,11 +108,21 @@ function isTokenExpired(token) {
 <template>
   <div class="d-flex vh-100">
     <!-- Passiamo il ref al componente Sidebar e evento per aprire popup -->
-    <Sidebar :scroll-container="mainScrollContainer" @open-settings="openSettings" />
-
+    <Sidebar 
+      :scroll-container="mainScrollContainer" 
+      @open-settings="openSettings"
+      @update-page-title="updatePageTitle"
+    />
 
     <div class="flex-grow-1 d-flex flex-column">
-      <Navbar :scroll-container="mainScrollContainer" @open-settings="openSettings" @open-userdata="openUserData" />
+      <!-- Passiamo il titolo corrente alla Navbar -->
+      <Navbar 
+        :page-title="currentPageTitle"
+        :scroll-container="mainScrollContainer" 
+        @open-settings="openSettings" 
+        @open-userdata="openUserData" 
+      />
+      
       <!-- Contenitore scrollabile dove entrano le pagine -->
       <div class="flex-grow-1 overflow-auto bg-light" ref="mainScrollContainer">
         <router-view />

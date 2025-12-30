@@ -1,90 +1,113 @@
 <template>
-  <div class="d-flex flex-column vh-100 text-white overflow-auto flex-shrink-0"
-    style="width: 240px; background-color: #1F263E;">
+  <div class="d-flex flex-column vh-100 text-white overflow-auto flex-shrink-0 sidebar-container">
 
     <!-- Contenitore principale con flex-grow per spingere il pulsante in basso -->
-    <div class="flex-grow-1 d-flex flex-column ">
+    <div class="flex-grow-1 d-flex flex-column">
 
       <!-- Barra vuota all'altezza della navbar -->
-      <nav class="navbar p-0 mb-3 py-4 d-flex justify-content-center align-items-center"
-        style="border-bottom: 0.5px solid white;">
+      <nav class="navbar p-0 mb-3 py-4 d-flex justify-content-center align-items-center sidebar-header">
         <h4 class="text-white navbar-brand mb-0 h5">PreFix</h4>
       </nav>
 
       <!-- Titolo Quick Access -->
-      <ul class="nav flex-column mt-4 ps-4">
-        <li class="nav-item mb-2">
-          <h4>Quick Access</h4>
+      <ul class="nav flex-column mt-4">
+        <li class="nav-item mb-2 px-3">
+          <h6 class="text-uppercase small fw-semibold mb-0">Quick Access</h6>
         </li>
       </ul>
 
       <!-- Lista link route principali -->
       <ul class="nav flex-column mt-0 sidebar-menu">
         <li class="nav-item">
-          <router-link to="/dashboard" class="nav-link ps-5" active-class="active-link"
-            exact-active-class="active-link">
-            Dashboard
+          <router-link to="/dashboard" class="nav-link sidebar-link" active-class="active-link"
+            exact-active-class="active-link" @click="setPageTitle('Dashboard')">
+            <div class="d-flex align-items-center">
+              <i class="bi bi-bar-chart icon-azure me-3 flex-shrink-0"></i>
+              <span class="sidebar-text">Dashboard</span>
+            </div>
           </router-link>
         </li>
         <li class="nav-item">
-          <router-link to="/calendar" class="nav-link ps-5" active-class="active-link" exact-active-class="active-link">
-            Calendario Interventi
+          <router-link to="/calendar" class="nav-link sidebar-link" active-class="active-link" exact-active-class="active-link"
+            @click="setPageTitle('Calendario Interventi')">
+            <div class="d-flex align-items-center">
+              <i class="bi bi-calendar-event icon-azure me-3 flex-shrink-0"></i>
+              <span class="sidebar-text">Calendario Interventi</span>
+            </div>
           </router-link>
         </li>
         <li class="nav-item">
-          <router-link to="/Buildings-List" class="nav-link ps-5" active-class="active-link"
-            exact-active-class="active-link">
-            Edifici affidati
+          <router-link to="/Buildings-List" class="nav-link sidebar-link" active-class="active-link"
+            exact-active-class="active-link" @click="setPageTitle('Edifici affidati')">
+            <div class="d-flex align-items-center">
+              <i class="bi bi-building icon-azure me-3 flex-shrink-0"></i>
+              <span class="sidebar-text">Edifici affidati</span>
+            </div>
           </router-link>
         </li>
       </ul>
 
       <!-- Titolo Sede -->
-      <ul class="nav flex-column mt-4 ps-4">
-        <li class="nav-item mb-2">
-          <h4>Povo 1</h4>
+      <ul class="nav flex-column mt-4">
+        <li class="nav-item mb-2 px-3">
+          <h6 class="text-uppercase small fw-semibold mb-0">Povo 1</h6>
         </li>
       </ul>
 
       <!-- Lista link grafici con scroll -->
       <ul class="nav flex-column mt-0 sidebar-menu">
         <li class="nav-item">
-          <a href="#pannello-riepilogativo" class="nav-link ps-5"
+          <a href="#pannello-riepilogativo" class="nav-link sidebar-link"
             :class="{ 'active-link': activeLink === 'pannello-riepilogativo' }"
             @click.prevent="goToGraph('pannello-riepilogativo')">
-            Pannello Riepilogativo
+            <div class="d-flex align-items-center">
+              <i class="bi bi-clipboard-data icon-azure me-3 flex-shrink-0"></i>
+              <span class="sidebar-text">Pannello Riepilogativo</span>
+            </div>
           </a>
         </li>
         <li class="nav-item">
-          <a href="#grafico-linee" class="nav-link ps-5" :class="{ 'active-link': activeLink === 'grafico-linee' }"
+          <a href="#grafico-linee" class="nav-link sidebar-link" :class="{ 'active-link': activeLink === 'grafico-linee' }"
             @click.prevent="goToGraph('grafico-linee')">
-            Grafico a linee
+            <div class="d-flex align-items-center">
+              <i class="bi bi-graph-up icon-azure me-3 flex-shrink-0"></i>
+              <span class="sidebar-text">Grafico a linee</span>
+            </div>
           </a>
         </li>
         <li class="nav-item">
-          <a href="#grafico-torta" class="nav-link ps-5" :class="{ 'active-link': activeLink === 'grafico-torta' }"
+          <a href="#grafico-torta" class="nav-link sidebar-link" :class="{ 'active-link': activeLink === 'grafico-torta' }"
             @click.prevent="goToGraph('grafico-torta')">
-            Grafico a torta
+            <div class="d-flex align-items-center">
+              <i class="bi bi-pie-chart icon-azure me-3 flex-shrink-0"></i>
+              <span class="sidebar-text">Grafico a torta</span>
+            </div>
           </a>
         </li>
         <li class="nav-item">
-          <router-link to="/visualizzazione-tabellare" class="nav-link ps-5" active-class="active-link"
-            exact-active-class="active-link">
-            Visualizzazione Tabellare
+          <router-link to="/visualizzazione-tabellare" class="nav-link sidebar-link" active-class="active-link"
+            exact-active-class="active-link" @click="setPageTitle('Visualizzazione Tabellare')">
+            <div class="d-flex align-items-center">
+              <i class="bi bi-table icon-azure me-3 flex-shrink-0"></i>
+              <span class="sidebar-text">Visualizzazione Tabellare</span>
+            </div>
           </router-link>
         </li>
       </ul>
 
-      <!-- Titolo Sede -->
-      <ul class="nav flex-column mt-4 ps-4">
-        <li class="nav-item mb-2">
-          <h4>Account</h4>
+      <!-- Titolo Account -->
+      <ul class="nav flex-column mt-4">
+        <li class="nav-item mb-2 px-3">
+          <h6 class="text-uppercase small fw-semibold mb-0">Account</h6>
         </li>
       </ul>
       <ul class="nav flex-column mt-0 sidebar-menu">
         <li class="nav-item">
-          <a href="#" class="nav-link ps-5" @click.prevent="$emit('open-settings')">
-            Impostazioni
+          <a href="#" class="nav-link sidebar-link" @click.prevent="$emit('open-settings')">
+            <div class="d-flex align-items-center">
+              <i class="bi bi-gear icon-azure me-3 flex-shrink-0"></i>
+              <span class="sidebar-text">Impostazioni</span>
+            </div>
           </a>
         </li>
       </ul>
@@ -92,8 +115,9 @@
 
     <!-- Pulsante Logout sempre in basso -->
     <div class="p-3">
-      <button class="btn w-100 sidebar-logout-btn" @click="logout">
-        Logout
+      <button class="btn w-100 sidebar-logout-btn d-flex align-items-center justify-content-center" @click="logout">
+        <i class="bi bi-box-arrow-right icon-azure me-2"></i>
+        <span>Logout</span>
       </button>
     </div>
 
@@ -101,31 +125,86 @@
 </template>
 
 <style scoped>
-/* Link della sidebar */
-.sidebar-menu .nav-link {
+.sidebar-container {
+  width: 260px;
+  background-color: #1F263E;
+}
+
+/* Link della sidebar - SPAZIATURA PIENA */
+.sidebar-link {
   background-color: #1F263E;
   color: white;
   text-decoration: none;
   border-radius: 0;
-  padding-left: 10px;
-  padding-top: 0.75rem;
-  padding-bottom: 0.75rem;
-  transition: background-color 0.2s ease;
+  padding: 0.75rem 1rem;
+  transition: all 0.2s ease;
+  display: block;
+  width: 100%;
+  /* Rimuove tutti i margini */
+  margin: 0;
+  border-left: none;
+  border-right: none;
+}
+
+/* Testo che si adatta */
+.sidebar-text {
+  flex-grow: 1;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+/* Icone azzurre */
+.icon-azure {
+  color: #58a6ff !important;
+  flex-shrink: 0;
 }
 
 /* Hover */
-.sidebar-menu .nav-link:hover {
+.sidebar-link:hover {
   background-color: #27314E;
 }
 
-/* Link attivo */
-.nav-link.active-link {
+/* LINK ATTIVO - RIEMPIE TUTTA LA LARGHEZZA */
+.sidebar-link.active-link {
   background-color: #3A4668;
   font-weight: bold;
+  /* Bordo SOLO a sinistra */
   border-left: 4px solid #58a6ff;
-  padding-left: 6px;
+  border-right: none;
   color: white;
-  /* forza testo bianco */
+  /* Estende fino al bordo destro */
+  margin-right: 0;
+  padding-right: 1rem;
+  /* Rimuove eventuali spazi extra */
+  position: relative;
+  left: 0;
+  right: 0;
+}
+
+/* Colore icone nei link attivi */
+.sidebar-link.active-link .icon-azure {
+  color: white !important;
+}
+
+/* Contenitore per estendere fino al bordo */
+.sidebar-menu {
+  /* Rimuove padding e margin del contenitore */
+  padding: 0;
+  margin: 0;
+  width: 100%;
+}
+
+/* Rimuove spaziature dagli item */
+.sidebar-menu .nav-item {
+  margin: 0;
+  width: 100%;
+}
+
+/* Header */
+.sidebar-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 /* Stile pulsante logout */
@@ -133,15 +212,21 @@
   background-color: #27314E;
   color: white;
   border: none;
-  border-radius: 0;
-  padding: 0.5rem 0;
-  transition: background-color 0.2s ease;
+  border-radius: 6px;
+  padding: 0.6rem 0;
+  transition: all 0.2s ease;
 }
 
 .sidebar-logout-btn:hover {
   background-color: #3A4668;
 }
+
+/* Assicura che tutto sia allineato correttamente */
+.d-flex.align-items-center {
+  min-height: 24px;
+}
 </style>
+
 
 <script setup>
 import { ref, watch, onUnmounted } from 'vue'
@@ -156,6 +241,8 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 
+const emit = defineEmits(['update-page-title', 'open-settings'])
+
 // LOGOUT
 async function logout() {
   try {
@@ -167,6 +254,19 @@ async function logout() {
 
 // Link attivo dei grafici
 const activeLink = ref('')
+
+// Mappa dei titoli per le route
+const routeTitles = {
+  '/dashboard': 'Dashboard',
+  '/calendar': 'Calendario Interventi',
+  '/Buildings-List': 'Edifici affidati',
+  '/visualizzazione-tabellare': 'Visualizzazione Tabellare'
+}
+
+// Funzione per aggiornare il titolo
+function setPageTitle(title) {
+  emit('update-page-title', title)
+}
 
 // Scroll al grafico selezionato con offset navbar
 function scrollTo(id) {
@@ -230,10 +330,25 @@ function scrollToGraphFromQuery() {
         behavior: 'smooth'
       })
       activeLink.value = graphId
+      
       router.replace({ query: {} }) // rimuovo query per evitare scroll futuri indesiderati
     }
   }
 }
+
+// Aggiorna il titolo quando cambia la route
+watch(() => route.path, (newPath) => {
+  if (routeTitles[newPath]) {
+    setPageTitle(routeTitles[newPath])
+  }
+  
+  // Resetta activeLink se non siamo su dashboard
+  if (newPath !== '/dashboard') {
+    activeLink.value = ''
+  } else {
+    scrollToGraphFromQuery()
+  }
+}, { immediate: true })
 
 // Watch per aggiornare event listener quando scrollContainer cambia
 watch(() => props.scrollContainer, (newContainer, oldContainer) => {
@@ -246,15 +361,6 @@ watch(() => props.scrollContainer, (newContainer, oldContainer) => {
     onScroll() // evidenzia subito la sezione visibile
   }
 }, { immediate: true })
-
-// Watch sulla route per resettare activeLink se non siamo su dashboard
-watch(() => route.path, (newPath) => {
-  if (newPath !== '/dashboard') {
-    activeLink.value = ''
-  } else {
-    scrollToGraphFromQuery()
-  }
-})
 
 // Cleanup al destroy
 onUnmounted(() => {
