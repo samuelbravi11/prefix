@@ -17,7 +17,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start_local": "node --env-file=.env src/server.js",
-    "start_proxy": "NODE_OPTIONS=--no-deprecation node --env-file=.env src/proxyServer.js"
+    "start_proxy:win": "set NODE_OPTIONS=--no-deprecation && node --env-file=.env src/proxyServer.js",
+    "start_proxy:unix": "NODE_OPTIONS=--no-deprecation node --env-file=.env src/proxyServer.js"
   },
   "devDependencies": {
     "dotenv": "^17.2.3"

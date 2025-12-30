@@ -1,7 +1,6 @@
-import { createRouter, createWebHistory } from 'vue-router'
-import AuthLayout from '../layouts/AuthLayout.vue'
+import { createRouter, createWebHistory } from "vue-router";
+import AuthLayout from "../layouts/AuthLayout.vue";
 import { useAuthStore } from "@/stores/auth.store";
-
 
 /* STRUTTURA DELLE ROTTE:
 
@@ -39,7 +38,7 @@ const routes = [
   {
     path: "/register",
     component: () => import("@/views/Register.vue"),
-    meta: { public: true }
+    meta: { public: true },
   },
   {
     path: "/",
@@ -60,9 +59,24 @@ const routes = [
         name: "user-requests",
         component: () => import("@/views/UserRequests.vue"),
       },
+      {
+        path: "buildings-list",
+        name: "buildings-list",
+        component: () => import("@/views/BuildingsList.vue"),
+      },
+      {
+        path: "calendar",
+        name: "calendar",
+        component: () => import("@/views/Calendar.vue"),
+      },
+      {
+        path: "visualizzazione-tabellare",
+        name: "visualizzazione-tabellare",
+        component: () => import("@/views/VisualizzazioneTabellare.vue"),
+      },
     ],
-  }
-]
+  },
+];
 
 const router = createRouter({
   history: createWebHistory(),
@@ -75,7 +89,7 @@ router.beforeEach(async (to, from, next) => {
   const token = localStorage.getItem("accessToken");
 
   // Se la rotta richiede autenticazione
-  if (to.matched.some(record => record.meta.requiresAuth)) {
+  if (to.matched.some((record) => record.meta.requiresAuth)) {
     if (!token) {
       return next("/login");
     }
@@ -84,7 +98,7 @@ router.beforeEach(async (to, from, next) => {
     if (!authStore.isAuthenticated && !authStore.loading) {
       try {
         await authStore.fetchMe();
-        
+
         if (!authStore.isAuthenticated) {
           return next("/login");
         }

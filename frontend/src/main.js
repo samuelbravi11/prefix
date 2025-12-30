@@ -7,6 +7,13 @@ import { createPinia } from "pinia";
 import App from "./App.vue";
 import router from "./router";
 
+import PrimeVue from "@/plugins/primevue"
+
+import 'primevue/resources/themes/lara-light-blue/theme.css'
+import 'primevue/resources/primevue.css'
+import 'primeicons/primeicons.css'
+import 'primevue/resources/primevue.min.css'
+
 const app = createApp(App);
 const pinia = createPinia();
 
@@ -17,6 +24,7 @@ funzionamento:
 - in ogni componente posso usare lo store (import { useXXXStore } from '...')
 - lo store mantiene lo stato globale dell’app (es. utente loggato, notifiche, ecc)
 */
+app.use(PrimeVue)
 app.use(pinia);
 app.use(router);
 app.mount("#app");

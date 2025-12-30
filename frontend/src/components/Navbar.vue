@@ -11,30 +11,21 @@
 
         <!-- Settings -->
         <div class="icon-wrapper">
-          <img :src="settings" class="icon" />
+          <img :src="settingsIcon" class="icon" @click="$emit('open-settings')" />
         </div>
 
         <!-- Notifiche -->
         <div class="icon-wrapper position-relative">
-          <img
-            :src="notifiche"
-            class="icon"
-            @click="showNotifications = !showNotifications"
-          />
+          <img :src="notifiche" class="icon" @click="showNotifications = !showNotifications" />
 
           <!-- Badge -->
-          <span
-            v-if="notificationCount > 0"
-            class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-          >
+          <span v-if="notificationCount > 0"
+            class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
             {{ notificationCount }}
           </span>
 
           <!-- Lista notifiche -->
-          <NotificationList
-            v-if="showNotifications"
-            class="notification-dropdown"
-          />
+          <NotificationList v-if="showNotifications" class="notification-dropdown" />
         </div>
       </div>
     </div>
@@ -43,7 +34,7 @@
 
 <script setup>
 import notifiche from "@/assets/images/Notifiche.png"
-import settings from "@/assets/images/Setting.png"
+import settingsIcon from "@/assets/images/Setting.png"
 import iconaUtente from "@/assets/images/icona_utente.png"
 import { ref } from "vue";
 import NotificationList from "./NotificationList.vue";
@@ -83,9 +74,11 @@ const {
 
 .notification-dropdown {
   position: absolute;
-  top: 120%; /* spinge il dropdown sotto la campanella */
+  top: 120%;
+  /* spinge il dropdown sotto la campanella */
   right: 0;
   min-width: 320px;
-  z-index: 10000; /* sopra tutto */
+  z-index: 10000;
+  /* sopra tutto */
 }
 </style>

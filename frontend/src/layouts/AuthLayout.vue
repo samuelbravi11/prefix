@@ -1,27 +1,32 @@
 <script setup>
-import { onMounted, onUnmounted } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth.store";
 import { useNotificationStore } from "@/stores/notification.store";
 import { initSocket, closeSocket } from "@/services/socket.service.js";
 import Sidebar from "@/components/Sidebar.vue";
 import Navbar from "@/components/Navbar.vue";
+import Settings from '@/components/Settings.vue'
 
 /* AuthLayout.vue
-  Il layout è un contenitore di pagine. Qua dentro ci va tutto ciò che richiede l'autenticazione.
-  Si occupa di fetchare le notifiche all'onMounted se l'utente è autenticato.
-
-  Questo include:
-  <AuthLayout>
-    Sidebar
-    Navbar
-    <router-view /> <-- qui entrano le pagine (Dashboard, Profilo, ecc.)
-  </AuthLayout>
+  Layout contenitore per tutte le pagine che richiedono autenticazione.
+  Include:
+    - Sidebar
+    - Navbar
+    - <router-view /> per le pagine (Dashboard, Profilo, ecc.)
+  Si occupa anche di fetchare notifiche e inizializzare il socket
 */
 
 const authStore = useAuthStore();
 const notificationStore = useNotificationStore();
 const router = useRouter();
+
+// Ref del contenitore scrollabile della dashboard
+const mainScrollContainer = ref(null);
+
+// Popup impostazioni
+const showSettings = ref(false)
+function openSettings() { showSettings.value = true }
 
 //chiama l’API /notifications --> popola lo store --> aggiorna badge e lista
 onMounted(async () => {
@@ -90,13 +95,19 @@ function isTokenExpired(token) {
 
 <template>
   <div class="d-flex vh-100">
-    <Sidebar />
+    <!-- Passiamo il ref al componente Sidebar e evento per aprire popup -->
+    <Sidebar :scroll-container="mainScrollContainer" @open-settings="openSettings"/>
+
 
     <div class="flex-grow-1 d-flex flex-column">
-      <Navbar />
-      <div class="flex-grow-1 overflow-auto">
+      <Navbar :scroll-container="mainScrollContainer" @open-settings="openSettings"/>
+      <!-- Contenitore scrollabile dove entrano le pagine -->
+      <div class="flex-grow-1 overflow-auto bg-light" ref="mainScrollContainer">
         <router-view />
       </div>
     </div>
+
+    <!-- Popup impostazioni modulare -->
+    <Settings v-model:show="showSettings" />
   </div>
 </template>
