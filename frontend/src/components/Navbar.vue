@@ -5,8 +5,9 @@
       <div class="d-flex align-items-center navbar-icons">
 
         <!-- Utente -->
+      
         <div class="icon-wrapper">
-          <img :src="iconaUtente" class="icon-user" />
+          <img :src="iconaUtente" class="icon" @click="$emit('open-userdata')" />
         </div>
 
         <!-- Settings -->

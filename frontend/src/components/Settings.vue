@@ -2,7 +2,7 @@
   <Dialog header="Impostazioni" v-model:visible="showLocal" modal :closable="true">
     <!-- Contenuto del popup -->
     <div class="p-2">
-      <p>Qui puoi mettere tutte le impostazioni dell’utente.</p>
+      <p>Qui puoi modificare le impostazioni dell’utente.</p>
 
       <!-- Esempio campi impostazioni -->
       <div class="mb-2">

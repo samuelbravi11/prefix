@@ -7,6 +7,7 @@ import { initSocket, closeSocket } from "@/services/socket.service.js";
 import Sidebar from "@/components/Sidebar.vue";
 import Navbar from "@/components/Navbar.vue";
 import Settings from '@/components/Settings.vue'
+import UserData from '@/components/UserData.vue'
 
 /* AuthLayout.vue
   Layout contenitore per tutte le pagine che richiedono autenticazione.
@@ -28,6 +29,9 @@ const mainScrollContainer = ref(null);
 const showSettings = ref(false)
 function openSettings() { showSettings.value = true }
 
+const showUserData = ref(false)
+function openUserData() { showUserData.value = true }
+
 //chiama l’API /notifications --> popola lo store --> aggiorna badge e lista
 onMounted(async () => {
   const token = localStorage.getItem("accessToken");
@@ -36,14 +40,14 @@ onMounted(async () => {
     try {
       // Verifica se il token è scaduto (solo per evitare chiamate inutili)
       const isExpired = isTokenExpired(token);
-      
+
       if (isExpired) {
         // Il token è scaduto, logout immediato
         authStore.logout();
         router.push("/login");
         return;
       }
-      
+
       await authStore.fetchMe();
 
       if (authStore.isAuthenticated && authStore.user) {
@@ -53,14 +57,14 @@ onMounted(async () => {
           authStore.logout();
           return;
         }
-        
+
         // Inizializza WebSocket per notifiche in tempo reale
         initSocket({
           userId: authStore.user._id,
           role: authStore.user.roles?.[0]?.roleName,
           buildingId: authStore.user.buildingId
         });
-        
+
         await notificationStore.fetchNotifications();
       } else {
         // Se fetchMe non ha impostato isAuthenticated, qualcosa è andato storto
@@ -96,11 +100,11 @@ function isTokenExpired(token) {
 <template>
   <div class="d-flex vh-100">
     <!-- Passiamo il ref al componente Sidebar e evento per aprire popup -->
-    <Sidebar :scroll-container="mainScrollContainer" @open-settings="openSettings"/>
+    <Sidebar :scroll-container="mainScrollContainer" @open-settings="openSettings" />
 
 
     <div class="flex-grow-1 d-flex flex-column">
-      <Navbar :scroll-container="mainScrollContainer" @open-settings="openSettings"/>
+      <Navbar :scroll-container="mainScrollContainer" @open-settings="openSettings" @open-userdata="openUserData" />
       <!-- Contenitore scrollabile dove entrano le pagine -->
       <div class="flex-grow-1 overflow-auto bg-light" ref="mainScrollContainer">
         <router-view />
@@ -109,5 +113,6 @@ function isTokenExpired(token) {
 
     <!-- Popup impostazioni modulare -->
     <Settings v-model:show="showSettings" />
+    <UserData v-model:show="showUserData" />
   </div>
 </template>
