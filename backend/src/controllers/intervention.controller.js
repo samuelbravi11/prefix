@@ -1,26 +1,45 @@
 // controllers/intervention.controller.js
 import { Intervention } from "../models/Intervention.js";
+import { getInterventionsQuery } from "../repositories/intervention.repository.js";
 
 /*
   Restituisce lo storico interventi
   degli edifici dell’utente
 */
-export const getInterventions = async (req, res) => {
+export async function getInterventions(req, res) {
   try {
-    const interventions = await Intervention.find({
-      buildingId: { $in: req.user.buildingIds },
-    })
-      .sort({ performedAt: -1 })
-      .lean();
+    console.log("REQ.USER COMPLETO:", req.user);
+    console.log("BUILDING IDS:", req.user.buildingIds);
+    console.log("BUILDING IDS TYPE:", typeof req.user.buildingIds);
+    console.log(
+      "BUILDING IDS ARRAY:",
+      Array.isArray(req.user.buildingIds)
+    );
+
+
+    const { period, assetId } = req.query;
+
+    if (period && !["month", "quarter", "year"].includes(period)) {
+      return res.status(400).json({
+        message: "Parametro period non valido",
+        allowed: ["month", "quarter", "year"]
+      });
+    }
+
+    const interventions = await getInterventionsQuery({
+      buildingIds: req.user.buildingIds,
+      assetId,
+      period
+    });
 
     res.json(interventions);
   } catch (err) {
     res.status(500).json({
       message: "Errore nel recupero interventi",
-      error: err.message,
+      error: err.message
     });
   }
-};
+}
 
 /*
   Restituisce dettaglio intervento

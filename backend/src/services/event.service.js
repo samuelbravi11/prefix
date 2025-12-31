@@ -12,25 +12,35 @@ import { notifyEvent } from "./notification.service.js";
   - persiste l'evento nel database;
   - genera notifiche interne tramite il Notification Service per informare gli utenti interessati della creazione o modifica dell'evento.
 */
-export const createMaintenanceEvent = async ({ assetId, reason, data }) => {
+export const createMaintenanceEvent = async ({
+  assetId,
+  reason,
+  scheduledAt = null,
+  aiResultId,
+  data = {},
+}) => {
   // recupero asset per buildingId
   const asset = await Asset.findById(assetId).lean();
   if (!asset) {
     throw new Error("Asset not found while creating event");
   }
 
+  console.log("[EVENT SERVICE] scheduledAt ricevuto:", scheduledAt);
+
   const event = await Event.create({
     assetId: asset._id,
     buildingId: asset.buildingId,
     reason,
+    scheduledAt,
+    aiResultId,
     data,
   });
 
-  // Creazione notifica interna tramite Notification Service
   await notifyEvent({
     type: "maintenance_created",
-    event
+    event,
   });
 
   return event;
-}
+};
+

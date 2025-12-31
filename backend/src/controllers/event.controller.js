@@ -4,14 +4,28 @@ import Event from "../models/Event.js";
 /*
   Restituisce gli eventi associati
   agli edifici dell’utente
+
+  GET /api/v1/events
+  - default: tutti gli eventi --> “Quali eventi di manutenzione esistono per i miei edifici?” (Registro completo degli eventi)
+  - ?type=calendar --> “Quali interventi sono già pianificati e quando devo eseguirli?” (Agenda delle cose da fare)
 */
 export const getEvents = async (req, res) => {
   try {
-    const events = await Event.find({
+    const filter = {
       buildingId: { $in: req.user.buildingIds },
-    })
-      .sort({ createdAt: -1 })
-      .lean();
+    };
+
+    // vista calendario
+    if (req.query.type === "calendar") {
+      filter.scheduledAt = { $ne: null };
+    }
+
+    const sort =
+      req.query.type === "calendar"
+        ? { scheduledAt: 1 }
+        : { createdAt: -1 };
+
+    const events = await Event.find(filter).sort(sort).lean();
 
     res.json(events);
   } catch (err) {
@@ -21,6 +35,7 @@ export const getEvents = async (req, res) => {
     });
   }
 };
+
 
 /*
   Restituisce il dettaglio di un singolo evento

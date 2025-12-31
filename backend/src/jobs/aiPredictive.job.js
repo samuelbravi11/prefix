@@ -1,4 +1,4 @@
-import { getAllInterventionsByAsset } from "../repositories/intervention.repository.js";
+import { getInterventionsQuery } from "../repositories/intervention.repository.js";
 import { normalizeInterventionsForAI } from "../services/predictive.service.js";
 import { callPythonPredictiveAI } from "../services/python.service.js";
 import { createMaintenanceEvent } from "../services/event.service.js";
@@ -9,7 +9,11 @@ import { createAIResult } from "../repositories/airesult.repository.js";
 */
 export const aiPredictiveCheckJob = async (asset, now) => {
   // recupero storico interventi
-  const interventions = await getAllInterventionsByAsset(asset);
+  const interventions = await getInterventionsQuery({
+    buildingIds: [asset.buildingId],
+    assetId: asset._id,
+    period: null, // NESSUN filtro temporale → storico completo
+  });
   console.log("STORICO INTERVENTI:\n", interventions);
 
   // se non ho uno storico esco --> nessun evento
@@ -53,6 +57,9 @@ export const aiPredictiveCheckJob = async (asset, now) => {
     },
   });
 
+  console.log("[AI] shouldCreateEvent:", response.shouldCreateEvent);
+  console.log("[AI] suggestedDate:", response.suggestedDate);
+
   // se il rischio supera una certa soglia --> creo evento
   if (response.shouldCreateEvent) {
     await createMaintenanceEvent({
@@ -61,6 +68,7 @@ export const aiPredictiveCheckJob = async (asset, now) => {
       reason: "ai_predictive",
       aiResultId: aiResult._id,
 
+      // data suggerita direttamente dall’AI (manualmente)
       scheduledAt: response.suggestedDate
         ? new Date(response.suggestedDate)
         : null,

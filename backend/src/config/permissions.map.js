@@ -19,8 +19,10 @@ export const PERMISSION_MAP = {
   "GET /api/v1/users/me": "area_riservata:access",
 
   "GET /api/v1/notifications": "notifications:view",
+  "PATCH /api/v1/notifications/:id/read": "notifications:view",
+  "PATCH /api/v1/notifications/read-all": "notifications:view",
 
-  "GET /api/v1/calendar": "calendar:view",
+  //"GET /api/v1/calendar": "calendar:view",
 
   "GET /api/v1/events": "events:view",
   "GET /api/v1/events/:id": "events:view",
@@ -36,11 +38,16 @@ export const PERMISSION_MAP = {
   UTENTE SECONDARIO
   -------------- */
   "POST /api/v1/requests/assign-building": "requests:assign_building:create",
+  "POST /api/v1/requests/assign-role": "requests:assign_role:create",
 
 
   /* -----------
   ADMIN CENTRALE
   ----------- */
+  "GET /api/v1/requests": "requests:manage",
+  "GET /api/v1/requests/:id": "requests:manage",
+  "PUT /api/v1/requests/:id": "requests:manage",
+  
   "GET /api/v1/users/pending": "users:pending:view",
   "PUT /api/v1/users/:id/assign-role": "users:assign_role",
   "PUT /api/v1/users/:id/assign-building": "users:assign_building",

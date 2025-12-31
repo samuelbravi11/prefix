@@ -1,68 +1,72 @@
 import Notification from "../models/Notification.js";
 import User from "../models/User.js";
+
 /*
-  GET tutte le notifiche dell’utente
+  GET /api/v1/notifications
+
+  - default: tutte le notifiche dell’utente
+  - ?not_read=true → solo notifiche non lette
+
+  Le notifiche sono visibili se:
+  - destinate direttamente all’utente
+  - oppure destinate al ruolo dell’utente
 */
 export const getUserNotifications = async (req, res) => {
   try {
-    console.log("=== DEBUG NOTIFICATIONS ===");
-    
-    // Leggi l'ID utente dall'header (dal proxy) o da req.user (se presente)
-    const userId = req.headers['x-user-id'] || (req.user && req.user.id);
-    
-    console.log("User ID:", userId);
-    console.log("Headers x-user-id:", req.headers['x-user-id']);
-    console.log("req.user:", req.user);
-    
-    if (!userId) {
-      return res.status(400).json({ message: "User ID non fornito" });
-    }
+    const userId = req.user._id;
+    const userRole = req.user.role;
 
-    // Recupera l'utente dal database per ottenere il ruolo
-    const user = await User.findById(userId).populate("roles");
-    
-    if (!user) {
-      return res.status(404).json({ message: "Utente non trovato" });
-    }
-    
-    const userRole = user.roles && user.roles.length > 0 ? user.roles[0].roleName : null;
-    
-    console.log("[NOTIFICATIONS] Fetching for user:", { userId, userRole });
-
-    // Query di test: tutte le notifiche
-    const allNotifications = await Notification.find({}).limit(10).lean();
-    console.log("Tutte le notifiche nel DB:", allNotifications.length);
-
-    // Cerca notifiche per userId O per ruolo
-    const notifications = await Notification.find({
+    // filtro base: destinatario user o ruolo
+    const filter = {
       $or: [
-        { 'recipient.userId': userId },
-        { 'recipient.role': userRole }
+        { "recipient.userId": userId },
+        { "recipient.role": userRole }
       ]
-    })
+    };
+
+    // opzionale: solo non lette
+    if (req.query.not_read === "true") {
+      filter.read = false;
+    }
+
+    const notifications = await Notification.find(filter)
       .sort({ createdAt: -1 })
       .limit(50)
       .lean();
 
-    console.log("Notifiche per utente:", notifications.length);
-    
     res.json(notifications);
   } catch (err) {
-    console.error("Errore fetch notifiche:", err);
-    res.status(500).json({ message: "Errore recupero notifiche" });
+    res.status(500).json({
+      message: "Errore nel recupero notifiche",
+      error: err.message
+    });
   }
 };
 
 /*
-  PATCH singola notifica letta
+  PATCH /api/v1/notifications/:id/read
+  Segna una notifica come letta
 */
 export const markNotificationAsRead = async (req, res) => {
   try {
+    const userId = req.user._id;
     const { id } = req.params;
 
-    await Notification.findByIdAndUpdate(id, {
-      read: true
-    });
+    const result = await Notification.findOneAndUpdate(
+      {
+        _id: id,
+        $or: [
+          { "recipient.userId": userId },
+          { "recipient.role": req.user.role }
+        ]
+      },
+      { read: true },
+      { new: true }
+    );
+
+    if (!result) {
+      return res.status(404).json({ message: "Notifica non trovata" });
+    }
 
     res.json({ success: true });
   } catch (err) {
@@ -71,14 +75,23 @@ export const markNotificationAsRead = async (req, res) => {
 };
 
 /*
-  PATCH tutte lette
+  PATCH /api/v1/notifications/read-all
+  Segna tutte le notifiche dell’utente come lette
 */
 export const markAllAsRead = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user._id;
+    const userRole = req.user.role;
 
     await Notification.updateMany(
-      { recipient: userId, read: false }
+      {
+        read: false,
+        $or: [
+          { "recipient.userId": userId },
+          { "recipient.role": userRole }
+        ]
+      },
+      { read: true }
     );
 
     res.json({ success: true });

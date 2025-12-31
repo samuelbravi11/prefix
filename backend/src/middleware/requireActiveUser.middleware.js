@@ -9,8 +9,12 @@ export default async function requireActiveUser(req, res, next) {
       return res.status(401).json({ message: "Utente non autenticato" });
     }
 
+    console.log("[requireActiveUser] req.user (prima):", req.user);
+
     // carico l’utente vero
     const user = await User.findById(req.user._id).lean();
+
+    console.log("[requireActiveUser] user dal DB:", user);
 
     if (!user) {
       return res.status(401).json({ message: "Utente non trovato" });
@@ -28,9 +32,11 @@ export default async function requireActiveUser(req, res, next) {
       _id: user._id,
       roleIds: user.roles || [],
       status: user.status,
-      buildingIds: user.associatedBuildingIds || [],
+      buildingIds: user.buildingIds || [],
     };
 
+    console.log("[requireActiveUser] req.user (finale):", req.user);
+    console.log("[requireActiveUser] buildingIds:", req.user.buildingIds);
 
     next();
   } catch (err) {

@@ -1,3 +1,4 @@
+/*
 // controllers/calendar.controller.js
 import Event from "../models/Event.js";
 
@@ -22,3 +23,4 @@ export const getCalendar = async (req, res) => {
     });
   }
 };
+*/

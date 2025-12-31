@@ -1,15 +1,33 @@
 import { Intervention } from "../models/Intervention.js";
+import { getDateRange } from "../services/dateRanges.service.js";
 
-// Restituisce lo storico COMPLETO degli interventi di un asset,
-// ordinato dal più recente al più vecchio.
-export const getAllInterventionsByAsset = async (asset) => {
-  if (!asset || !asset._id) {
-    throw new Error("Invalid asset passed to getAllInterventionsByAsset");
+export async function getInterventionsQuery({
+  buildingIds,
+  assetId,
+  period
+}) {
+  console.log("[INTERVENTIONS QUERY] buildingIds:", buildingIds);
+  console.log(
+    "[INTERVENTIONS QUERY] casted:",
+    buildingIds?.map(id => id.toString())
+  );
+
+  const filter = {
+    buildingId: { $in: buildingIds }
+  };
+
+  // filtro per asset specifico (opzionale)
+  if (assetId) {
+    filter.assetId = assetId;
   }
 
-  return Intervention.find({
-    assetId: asset._id,
-  })
+  // filtro temporale (opzionale)
+  if (period) {
+    const { from, to } = getDateRange(period);
+    filter.performedAt = { $gte: from, $lte: to };
+  }
+
+  return Intervention.find(filter)
     .sort({ performedAt: -1 })
     .lean();
-};
+}

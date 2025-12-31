@@ -1,3 +1,4 @@
+/*
 // routes/calendar.routes.js
 import express from "express";
 import * as calendarController from "../controllers/calendar.controller.js";
@@ -11,3 +12,4 @@ const router = express.Router();
 router.get("/", calendarController.getCalendar);
 
 export default router;
+*/

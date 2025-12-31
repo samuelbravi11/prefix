@@ -23,9 +23,9 @@ export const resolveUserByRoleAndBuilding = async ({ roleName, buildingId }) => 
   // cerco un utente con quel ruolo e edificio
   const user = await User.findOne({
     roles: role._id,
-    associatedBuildingIds: buildingId,
+    buildingIds: buildingId,
     status: "active"
-  }).select("_id roles associatedBuildingIds");
+  }).select("_id roles buildingIds");
 
   return user ? user._id : null;
 };

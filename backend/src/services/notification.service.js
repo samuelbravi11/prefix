@@ -13,66 +13,106 @@ import { resolveUserByRoleAndBuilding } from "../utils/notification.js";
   La responsabilità della distribuzione delle notifiche in tempo reale è demandata al Proxy Server, che agisce come gateway applicativo e punto di accesso unico per i client.
  */
 export const notifyEvent = async ({ type, event }) => {
-  let notification;
-  
-  switch (type) {
-    case "maintenance_created": {
-      const targetUserId = await resolveUserByRoleAndBuilding({
-        roleName: "admin_locale",
-        buildingId: event.buildingId
-      });
+  let notification = null;
 
-      notification = buildMaintenanceNotification(event, targetUserId);
+  switch (type) {
+    case "maintenance_created":
+      notification = await buildMaintenanceNotification(event);
       break;
-    }
 
     default:
+      // evento non notificabile
       return;
   }
-  
-  // Persistenza DB --> inserisco notifica nel DB così l'utente può visualizzarla in futuro dopo il login e quindi la creazione socket
+
+  if (!notification) return;
+
+  // Persistenza DB (storico notifiche)
   await Notification.create(notification);
 
-  console.log("\n\n\nINVIO CHIAMATA AL PROXY: /internal/events", notification, "\n\n\n");
-
-  // Invio evento al Proxy Server (WebSocket Gateway) --> mando evento in realtime per l'utente online in base a userId/role/buildingId
-  // Chiama la route interna protetta /internal/events del proxy che si occupa di emettere l'evento WS verso i client connessi in base a userId/role/buildingId (rooms)
+  // Invio realtime al Proxy (best effort)
   try {
-    const res = await fetch(`${process.env.PROXY_INTERNAL_URL}/internal/events`, {
+    await fetch(`${process.env.PROXY_INTERNAL_URL}/internal/events`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-internal-proxy": "true"
+        "x-internal-proxy": "true",
       },
-      body: JSON.stringify(notification)
+      body: JSON.stringify(notification),
     });
-
-    console.log("[notifyEvent] proxy status:", res.status);
   } catch (err) {
-    console.error("[notifyEvent] proxy error:", err);
+    console.error("[notifyEvent] Proxy WS error:", err.message);
   }
-
 };
 
+
 // Costruisce la notifica di creazione intervento manutenzione
-// notification.service.js
-function buildMaintenanceNotification(event, targetUserId = null) {
+async function buildMaintenanceNotification(event) {
+  /*
+    Destinatari:
+    - Admin locale dell’edificio
+  */
+  const targetUserId = await resolveUserByRoleAndBuilding({
+    roleName: "admin_locale",
+    buildingId: event.buildingId,
+  });
+
+  // Titolo e messaggio dipendono dal motivo dell’evento
+  const { title, message, priority } = resolveContentByReason(event);
+
   return {
     type: "CREAZIONE_INTERVENTO",
-    title: "Nuovo intervento pianificato",
-    message: `È stato pianificato un intervento di manutenzione`,
-    priority: "high",
 
-    recipient: targetUserId
-      ? { userId: targetUserId, role: null }
-      : null,
+    title,
+    message,
+    priority,
 
+    // targeting
+    recipient: targetUserId ? { userId: targetUserId } : null,
     targetRole: targetUserId ? null : "admin_locale",
-    targetBuildingId: event.buildingId ?? null,
+    targetBuildingId: event.buildingId,
 
-    relatedEventId: event.id,
+    // collegamenti
+    relatedEventId: event._id,
+
+    // metadati di sistema
     createdAt: new Date(),
     read: false,
-    readBy: []
+    readBy: [],
   };
+}
+
+function resolveContentByReason(event) {
+  switch (event.reason) {
+    case "ai_predictive":
+      return {
+        title: "Manutenzione suggerita dall’AI",
+        message: buildAIPredictiveMessage(event),
+        priority: "high",
+      };
+
+    case "rule_based":
+      return {
+        title: "Manutenzione programmata",
+        message: buildRuleBasedMessage(event),
+        priority: "medium",
+      };
+
+    default:
+      return {
+        title: "Nuovo evento di manutenzione",
+        message: "È stato creato un nuovo evento di manutenzione.",
+        priority: "medium",
+      };
+  }
+}
+
+function buildAIPredictiveMessage(event) {
+  const risk = event.data?.riskLevel ?? "non disponibile";
+  return `L’AI ha rilevato un possibile rischio (${risk}). È consigliato pianificare un intervento.`;
+}
+
+function buildRuleBasedMessage(event) {
+  const count = event.data?.dueRuleIds?.length ?? 1;
+  return `${count} regole di manutenzione risultano scadute.`;
 }

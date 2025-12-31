@@ -2,13 +2,20 @@ openapi: 3.0.3
 
 info:
   title: PreFix – Maintenance Management API
+  version: "1.0.0"
   description: |
     API per la gestione della manutenzione degli edifici comunali.
 
     **Sicurezza**
-    - Tutte le API `/api/v1/*` sono protette
-    - Autenticazione reale gestita da Proxy + Cookie + RBAC
-    - Swagger usa Bearer Token SOLO per documentazione/test
+    - Tutte le API `/api/v1/*` sono **protette**
+    - L’autenticazione reale è gestita da **Proxy + Cookie HTTP-only**
+    - L’autorizzazione è gestita tramite **RBAC (Policy Decision Point)**
+    - Swagger utilizza **Bearer Token SOLO per documentazione/test manuale**
+
+    Swagger **NON** gestisce correttamente i cookie HTTP-only.
+    Per questo motivo:
+    - Effettuare il login tramite Postman / Curl / Frontend
+    - Inserire manualmente un access token nel pulsante **Authorize** (solo per test)
 
     **Ruoli**
     - Utente registrato
@@ -16,11 +23,6 @@ info:
     - Admin locale
     - Admin centrale
     - Impresa
-
-    **Funzionamento**
-    - Effettuare il login di un utente già registrato, tramite Postman o Curl, ed inserire l'acccessToken (di validità breve) sulla form che appare al click del bottone "Authorize" per effettuare le API.
-    - `Motivo:` Swagger UI NON gestisce bene cookie HTTP-only. Se si prova ad effettuare un'API pubblica si resta in attesa all'infinito, poichè viene salvato il refreshToken all'interno di un cookie HTTP-only.
-  version: "1.0.0"
 
 servers:
   - url: http://localhost:5000
@@ -36,10 +38,8 @@ tags:
   - name: Buildings
   - name: Events
   - name: Interventions
-  - name: Calendar
   - name: Requests
   - name: Notifications
-  - name: Dashboard
 
 paths:
 
@@ -53,7 +53,7 @@ paths:
       summary: Registrazione utente
       description: |
         Registra un nuovo utente.
-        Ruolo iniziale: **pending**
+        Stato iniziale: **pending**
       requestBody:
         required: true
         content:
@@ -63,13 +63,15 @@ paths:
       responses:
         "201":
           description: Utente registrato
+        "400":
+          description: Dati non validi
 
   /auth/login:
     post:
       security: []
       tags: [Auth]
       summary: Login utente
-      description: Login (cookie-based)
+      description: Login basato su cookie HTTP-only
       requestBody:
         required: true
         content:
@@ -79,12 +81,14 @@ paths:
       responses:
         "200":
           description: Login effettuato
+        "401":
+          description: Credenziali non valide
 
   /auth/logout:
     post:
       security: []
       tags: [Auth]
-      summary: Logout
+      summary: Logout utente
       responses:
         "200":
           description: Logout effettuato
@@ -93,6 +97,9 @@ paths:
     get:
       tags: [Auth]
       summary: Utente corrente
+      description: |
+        **Ruolo richiesto:** Utente registrato
+        Restituisce i dettagli dell'utente corrente
       responses:
         "200":
           description: Dati utente loggato
@@ -100,6 +107,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/User"
+        "401":
+          description: Non autenticato
+
 
   # =====================
   # USERS
@@ -109,7 +119,8 @@ paths:
       tags: [Users]
       summary: Lista utenti
       description: |
-        **Admin Centrale**
+        **Ruolo richiesto:** Admin Centrale
+        Restituisce la lista di tutti gli utenti
       responses:
         "200":
           description: Lista utenti
@@ -119,13 +130,18 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/User"
+        "401":
+          description: Non autenticato
+        "403":
+          description: Accesso negato
 
   /api/v1/users/me:
     get:
       tags: [Users]
       summary: Profilo utente
       description: |
-        Utente registrato
+        **Ruolo richiesto:** Utente registrato
+        Restituisce i dettagli area personale dell'utente corrente
       responses:
         "200":
           description: Profilo utente
@@ -133,13 +149,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/User"
+        "401":
+          description: Non autenticato
 
   /api/v1/users/pending:
     get:
       tags: [Users]
       summary: Utenti in attesa
       description: |
-        **Admin Centrale**
+        **Ruolo richiesto:** Admin Centrale
+        Restituisce la lista di tutti gli utenti in stato di pending
       responses:
         "200":
           description: Utenti pending
@@ -149,13 +168,18 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/User"
+        "401":
+          description: Non autenticato
+        "403":
+          description: Accesso negato
 
   /api/v1/users/{id}/assign-role:
     put:
       tags: [Users]
       summary: Assegna ruolo
       description: |
-        **Admin Centrale**
+        **Ruolo richiesto:** Admin Centrale
+        Assegna un ruolo ad un particolare utente
       parameters:
         - $ref: "#/components/parameters/UserId"
       requestBody:
@@ -171,13 +195,20 @@ paths:
       responses:
         "200":
           description: Ruolo assegnato
+        "401":
+          description: Non autenticato
+        "403":
+          description: Accesso negato
+        "404":
+          description: Utente non trovato
 
   /api/v1/users/{id}/assign-building:
     put:
       tags: [Users]
       summary: Assegna edifici
       description: |
-        **Admin Centrale**
+        **Ruolo richiesto:** Admin Centrale
+        Assegna un edificio ad un particolare utente
       parameters:
         - $ref: "#/components/parameters/UserId"
       requestBody:
@@ -195,6 +226,13 @@ paths:
       responses:
         "200":
           description: Edifici assegnati
+        "401":
+          description: Non autenticato
+        "403":
+          description: Accesso negato
+        "404":
+          description: Utente non trovato
+
 
   # =====================
   # BUILDINGS
@@ -204,7 +242,8 @@ paths:
       tags: [Buildings]
       summary: Edifici associati
       description: |
-        Utente registrato
+        **Ruolo richiesto:** Utente registrato
+        Restituisce tutti i buildings a cui un utente è associato
       responses:
         "200":
           description: Lista edifici
@@ -214,6 +253,11 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Building"
+        "401":
+          description: Non autenticato
+        "403":
+          description: Accesso negato
+
 
   # =====================
   # EVENTS
@@ -223,7 +267,19 @@ paths:
       tags: [Events]
       summary: Lista eventi
       description: |
-        Utente registrato
+        **Ruolo richiesto:** Utente registrato
+        Restituisce gli eventi di manutenzione associati agli edifici dell’utente
+      parameters:
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [calendar]
+          description: |
+            Vista degli eventi:
+            - `null` (default) → registro completo degli eventi
+            - `calendar` → restituisce solo eventi con data pianificata (`scheduledAt != null`)
       responses:
         "200":
           description: Lista eventi
@@ -233,11 +289,16 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Event"
+        "401":
+          description: Non autenticato
 
   /api/v1/events/{id}:
     get:
       tags: [Events]
       summary: Dettaglio evento
+      description: |
+        **Ruolo richiesto:** Utente registrato
+        Restituisce il dettaglio di un singolo evento
       parameters:
         - $ref: "#/components/parameters/EventId"
       responses:
@@ -247,17 +308,52 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Event"
+        "401":
+          description: Non autenticato
+        "404":
+          description: Evento non trovato
 
-  # =====================
-  # INTERVENTIONS
-  # =====================
+
+# =====================
+# INTERVENTIONS
+# =====================
   /api/v1/interventions:
     get:
       tags: [Interventions]
       summary: Storico interventi
+      description: |
+        Restituisce lo storico degli interventi associati
+        agli edifici dell’utente.
+
+        ### Modalità di utilizzo
+        - **Senza parametri:** tutti gli interventi (storico completo)
+        - **Con `period`:** interventi filtrati per periodo
+        - **Con `assetId`:** interventi relativi a uno specifico asset
+        - **Combinabili**
+      parameters:
+        - name: period
+          in: query
+          required: false
+          description: |
+            Filtro temporale sugli interventi.
+            Valori ammessi:
+            - `month` → ultimo mese
+            - `quarter` → ultimo trimestre
+            - `year` → ultimo anno
+          schema:
+            type: string
+            enum: [month, quarter, year]
+
+        - name: assetId
+          in: query
+          required: false
+          description: ID dell’asset per filtrare gli interventi
+          schema:
+            type: string
+
       responses:
         "200":
-          description: Interventi
+          description: Lista interventi
           content:
             application/json:
               schema:
@@ -265,36 +361,139 @@ paths:
                 items:
                   $ref: "#/components/schemas/Intervention"
 
+        "400":
+          description: Parametri non validi
+        "401":
+          description: Non autenticato
+        "403":
+          description: Non autorizzato
+
   /api/v1/interventions/{id}:
     get:
       tags: [Interventions]
       summary: Dettaglio intervento
+      description: |
+        Restituisce il dettaglio di un singolo intervento.
       parameters:
         - $ref: "#/components/parameters/InterventionId"
       responses:
         "200":
-          description: Intervento
+          description: Dettaglio intervento
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Intervention"
 
-  # =====================
-  # CALENDAR
-  # =====================
-  /api/v1/calendar:
+        "401":
+          description: Non autenticato
+        "403":
+          description: Non autorizzato
+        "404":
+          description: Intervento non trovato
+
+
+# =====================
+# REQUESTS
+# =====================
+  /api/v1/requests:
     get:
-      tags: [Calendar]
-      summary: Calendario manutenzioni
+      tags: [Requests]
+      summary: Lista richieste
+      description: |
+        **Ruolo richiesto:** Admin Centrale
+        Restituisce la lista di tutte le richieste presenti nel sistema.
       responses:
         "200":
-          description: Eventi calendarizzati
+          description: Lista richieste
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Event"
+                  $ref: "#/components/schemas/Request"
+        "401":
+          description: Non autenticato
+        "403":
+          description: Non autorizzato
+
+  /api/v1/requests/{id}:
+    get:
+      tags: [Requests]
+      summary: Dettaglio richiesta
+      description: |
+        Restituisce il dettaglio di una singola richiesta.
+      parameters:
+        - $ref: "#/components/parameters/RequestId"
+      responses:
+        "200":
+          description: Dettaglio richiesta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Request"
+        "401":
+          description: Non autenticato
+        "403":
+          description: Non autorizzato
+        "404":
+          description: Richiesta non trovata
+
+  /api/v1/requests/assign-role:
+    post:
+      tags: [Requests]
+      summary: Richiesta assegnazione ruolo
+      description: |
+        **Ruolo richiesto:** Utente secondario
+        Permette a un utente di inviare una richiesta
+        per l’assegnazione di un ruolo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignRoleRequest"
+      responses:
+        "201":
+          description: Richiesta creata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Request"
+        "400":
+          description: Payload non valido
+        "401":
+          description: Non autenticato
+        "403":
+          description: Non autorizzato
+
+  /api/v1/requests/assign-building:
+    post:
+      tags: [Requests]
+      summary: Richiesta assegnazione edificio
+      description: |
+        **Ruolo richiesto:** Utente secondario
+        Permette a un utente di inviare una richiesta
+        per l’assegnazione a un edificio.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignBuildingRequest"
+      responses:
+        "201":
+          description: Richiesta creata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Request"
+        "400":
+          description: Payload non valido
+        "401":
+          description: Non autenticato
+        "403":
+          description: Non autorizzato
+
 
   # =====================
   # NOTIFICATIONS
@@ -303,33 +502,50 @@ paths:
     get:
       tags: [Notifications]
       summary: Notifiche utente
+      description: |
+        **Ruolo richiesto:** Utente registrato
+      parameters:
+        - name: not_read
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: |
+            Se true, restituisce solo le notifiche non lette
       responses:
         "200":
-          description: Notifiche
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Notification"
+          description: Lista notifiche
+        "401":
+          description: Non autenticato
 
   /api/v1/notifications/{id}/read:
     patch:
       tags: [Notifications]
       summary: Segna come letta
+      description: |
+        **Ruolo richiesto:** Utente registrato
+        Segna una particolare notifica come letta
       parameters:
         - $ref: "#/components/parameters/NotificationId"
       responses:
         "200":
           description: Notifica aggiornata
+        "401":
+          description: Non autenticato
 
   /api/v1/notifications/read-all:
     patch:
       tags: [Notifications]
       summary: Segna tutte come lette
+      description: |
+        **Ruolo richiesto:** Utente registrato
+        Segna tutte le notifiche come lette
       responses:
         "200":
           description: OK
+        "401":
+          description: Non autenticato
+
 
 components:
 
@@ -338,7 +554,9 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: Token usato solo per Swagger
+      description: |
+        Inserire l'access token JWT.
+        Usato SOLO per test su Swagger UI.
 
   parameters:
     UserId:
@@ -356,6 +574,13 @@ components:
         type: string
 
     InterventionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+
+    RequestId:
       name: id
       in: path
       required: true
@@ -426,11 +651,102 @@ components:
       properties:
         _id:
           type: string
+
+        assetId:
+          type: string
+          description: Asset associato all’intervento
+
         type:
           type: string
+          enum: [maintenance, inspection, failure, repair]
+
+        outcome:
+          type: string
+          enum: [ok, ko, partial]
+
+        severity:
+          type: string
+          enum: [low, medium, high]
+
+        description:
+          type: string
+
         performedAt:
           type: string
           format: date-time
+
+        durationMinutes:
+          type: number
+          description: Durata intervento in minuti
+
+        calendarEventId:
+          type: string
+          nullable: true
+
+        createdAt:
+          type: string
+          format: date-time
+
+        updatedAt:
+          type: string
+          format: date-time
+
+    Request:
+      type: object
+      properties:
+        _id:
+          type: string
+        requestType:
+          type: string
+          enum: [ASSIGN_ROLE, ASSIGN_BUILDING]
+        userId:
+          type: string
+        role:
+          type: string
+          nullable: true
+        buildingId:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED]
+        createdAt:
+          type: string
+          format: date-time
+
+    AssignRoleRequest:
+      type: object
+      required:
+        - requestType
+        - userId
+        - role
+      properties:
+        requestType:
+          type: string
+          enum: [ASSIGN_ROLE]
+        userId:
+          type: string
+          description: ID dell’utente che richiede il ruolo
+        role:
+          type: string
+          description: Ruolo richiesto dall’utente
+
+    AssignBuildingRequest:
+      type: object
+      required:
+        - requestType
+        - userId
+        - buildingId
+      properties:
+        requestType:
+          type: string
+          enum: [ASSIGN_BUILDING]
+        userId:
+          type: string
+          description: ID dell’utente che richiede l’assegnazione
+        buildingId:
+          type: string
+          description: ID dell’edificio richiesto
 
     Notification:
       type: object

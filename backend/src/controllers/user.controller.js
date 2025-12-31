@@ -58,7 +58,7 @@ export const getMe = async (req, res) => {
         roleIds: user.roles.map(r => r._id),
         roles: user.roles,
         status: user.status,
-        buildingIds: user.associatedBuildingIds || [],
+        buildingIds: user.buildingIds || [],
       },
     });
   } catch (err) {

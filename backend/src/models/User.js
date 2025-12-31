@@ -66,7 +66,7 @@ const UserSchema = new mongoose.Schema({
     ref: "Role"
   }],
 
-  associatedBuildingIds: [{
+  buildingIds: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: "Building",
     index: true

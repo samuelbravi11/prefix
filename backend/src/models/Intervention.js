@@ -9,6 +9,13 @@ const InterventionSchema = new mongoose.Schema(
       index: true,
     },
 
+    buildingId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Building",
+      required: true,
+      index: true,
+    },
+
     type: {
       type: String,
       required: true,
@@ -44,7 +51,7 @@ const InterventionSchema = new mongoose.Schema(
     // eventuale collegamento a evento calendario
     calendarEventId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "CalendarEvent",
+      ref: "Event",
     },
   },
   {

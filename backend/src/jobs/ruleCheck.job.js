@@ -3,6 +3,7 @@ import { createMaintenanceEvent } from '../services/event.service.js'
 import { getRulesByAsset } from "../repositories/rule.repository.js";
 import { buildRuleCheckPayload } from "../services/rule.service.js"
 import { createAIResult } from "../repositories/airesult.repository.js";
+import { computeScheduledAtForRule } from "../services/scheduling.service.js";
 
 /* RULE JOB
   L'unità di lavoro specifica che deve essere eseguita al fine di effettuare un controllo regolistico
@@ -50,10 +51,18 @@ export const ruleCheckJob = async (asset, now) => {
 
   // se almeno una regola è scaduta → creo evento
   if (response.shouldCreateEvent) {
+    const scheduledAt = computeScheduledAtForRule({
+      evaluatedAt: new Date(now),
+      windowDays: response.suggestedWindowDays ?? 7,
+    });
+
     await createMaintenanceEvent({
       assetId: asset._id,
       buildingId: asset.buildingId,
       reason: "rule_based",
+
+      // suggestedDate calcolata manualmente al contrario dell'AI predittiva
+      scheduledAt,
 
       // snapshot utile all’evento
       data: {
