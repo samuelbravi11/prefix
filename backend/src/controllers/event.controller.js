@@ -1,4 +1,5 @@
 // controllers/event.controller.js
+import mongoose from "mongoose";
 import Event from "../models/Event.js";
 
 /*
@@ -11,19 +12,54 @@ import Event from "../models/Event.js";
 */
 export const getEvents = async (req, res) => {
   try {
-    const filter = {
-      buildingId: { $in: req.user.buildingIds },
-    };
+    const { type, buildingId } = req.query;
 
-    // vista calendario
-    if (req.query.type === "calendar") {
+    const filter = {};
+    const now = new Date();
+
+    /* -------------------------
+       FILTRO PER EDIFICIO
+    ------------------------- */
+    if (buildingId) {
+      const castedBuildingId = new mongoose.Types.ObjectId(buildingId);
+
+      const allowed = req.user.buildingIds.some(
+        id => id.toString() === castedBuildingId.toString()
+      );
+
+      if (!allowed) {
+        return res.status(403).json({
+          message: "Non sei autorizzato a visualizzare eventi di questo edificio"
+        });
+      }
+
+      filter.buildingId = castedBuildingId;
+    } else {
+      filter.buildingId = {
+        $in: req.user.buildingIds.map(id =>
+          typeof id === "string" ? new mongoose.Types.ObjectId(id) : id
+        )
+      };
+    }
+
+    /* -------------------------
+       FILTRO PER TIPO
+    ------------------------- */
+    if (type === "calendar") {
       filter.scheduledAt = { $ne: null };
     }
 
+    if (type === "future") {
+      filter.scheduledAt = { $gte: now };
+    }
+
+    /* -------------------------
+       ORDINAMENTO
+    ------------------------- */
     const sort =
-      req.query.type === "calendar"
-        ? { scheduledAt: 1 }
-        : { createdAt: -1 };
+      type === "calendar" || type === "future"
+        ? { scheduledAt: 1 }       // prossimi eventi prima
+        : { createdAt: -1 };       // registro storico
 
     const events = await Event.find(filter).sort(sort).lean();
 
@@ -31,7 +67,7 @@ export const getEvents = async (req, res) => {
   } catch (err) {
     res.status(500).json({
       message: "Errore nel recupero eventi",
-      error: err.message,
+      error: err.message
     });
   }
 };

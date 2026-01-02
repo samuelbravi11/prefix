@@ -1,8 +1,10 @@
+import mongoose from "mongoose"
 import { Intervention } from "../models/Intervention.js";
 import { getDateRange } from "../services/dateRanges.service.js";
 
 export async function getInterventionsQuery({
   buildingIds,
+  buildingId,
   assetId,
   period
 }) {
@@ -11,17 +13,23 @@ export async function getInterventionsQuery({
     "[INTERVENTIONS QUERY] casted:",
     buildingIds?.map(id => id.toString())
   );
+  
+  const castedBuildingIds = buildingIds.map(id =>
+    typeof id === "string" ? new mongoose.Types.ObjectId(id) : id
+  );
 
   const filter = {
-    buildingId: { $in: buildingIds }
+    buildingId: { $in: castedBuildingIds }
   };
 
-  // filtro per asset specifico (opzionale)
-  if (assetId) {
-    filter.assetId = assetId;
+  if (buildingId) {
+    filter.buildingId = buildingId;
   }
 
-  // filtro temporale (opzionale)
+  if (assetId) {
+    filter.assetId = new mongoose.Types.ObjectId(assetId);
+  }
+
   if (period) {
     const { from, to } = getDateRange(period);
     filter.performedAt = { $gte: from, $lte: to };
@@ -31,3 +39,4 @@ export async function getInterventionsQuery({
     .sort({ performedAt: -1 })
     .lean();
 }
+

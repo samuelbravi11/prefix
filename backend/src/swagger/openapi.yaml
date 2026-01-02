@@ -268,18 +268,33 @@ paths:
       summary: Lista eventi
       description: |
         **Ruolo richiesto:** Utente registrato
-        Restituisce gli eventi di manutenzione associati agli edifici dell’utente
+        Restituisce gli eventi di manutenzione associati agli edifici dell’utente.
+
+        ### Filtro per edificio
+        - Se `buildingId` non è specificato → eventi di **tutti** gli edifici associati all’utente
+        - Se `buildingId` è specificato → eventi **solo** di quell’edificio
+
+        ### Vista calendario
+        - `type=calendar` restituisce solo eventi pianificati (`scheduledAt != null`)
       parameters:
         - name: type
           in: query
           required: false
           schema:
             type: string
-            enum: [calendar]
+            enum: [calendar, future]
           description: |
             Vista degli eventi:
-            - `null` (default) → registro completo degli eventi
-            - `calendar` → restituisce solo eventi con data pianificata (`scheduledAt != null`)
+            - assente → registro completo
+            - calendar → eventi pianificati
+            - future → solo eventi futuri (scheduledAt >= now)
+
+        - name: buildingId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: ID dell’edificio
       responses:
         "200":
           description: Lista eventi
@@ -291,6 +306,9 @@ paths:
                   $ref: "#/components/schemas/Event"
         "401":
           description: Non autenticato
+        "403":
+          description: Accesso non autorizzato all’edificio
+
 
   /api/v1/events/{id}:
     get:
@@ -322,15 +340,35 @@ paths:
       tags: [Interventions]
       summary: Storico interventi
       description: |
-        Restituisce lo storico degli interventi associati
-        agli edifici dell’utente.
+        **Ruolo richiesto:** Utente registrato
+        Restituisce lo storico degli interventi associati agli edifici dell’utente.
 
         ### Modalità di utilizzo
         - **Senza parametri:** tutti gli interventi (storico completo)
         - **Con `period`:** interventi filtrati per periodo
         - **Con `assetId`:** interventi relativi a uno specifico asset
-        - **Combinabili**
+        - **Con `buildingId`:** interventi relativi a uno specifico edificio
+        - **Parametri combinabili**
+
+        ### Sicurezza
+        Se viene passato `buildingId`, deve appartenere agli edifici associati all’utente.
       parameters:
+        - name: buildingId
+          in: query
+          required: false
+          description: |
+            ID dell’edificio per filtrare gli interventi.
+            Deve essere uno degli edifici associati all’utente.
+          schema:
+            type: string
+
+        - name: assetId
+          in: query
+          required: false
+          description: ID dell’asset per filtrare gli interventi
+          schema:
+            type: string
+
         - name: period
           in: query
           required: false
@@ -344,13 +382,6 @@ paths:
             type: string
             enum: [month, quarter, year]
 
-        - name: assetId
-          in: query
-          required: false
-          description: ID dell’asset per filtrare gli interventi
-          schema:
-            type: string
-
       responses:
         "200":
           description: Lista interventi
@@ -360,13 +391,13 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Intervention"
-
         "400":
           description: Parametri non validi
         "401":
           description: Non autenticato
         "403":
           description: Non autorizzato
+
 
   /api/v1/interventions/{id}:
     get:

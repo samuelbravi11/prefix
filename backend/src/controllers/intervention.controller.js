@@ -8,26 +8,26 @@ import { getInterventionsQuery } from "../repositories/intervention.repository.j
 */
 export async function getInterventions(req, res) {
   try {
-    console.log("REQ.USER COMPLETO:", req.user);
-    console.log("BUILDING IDS:", req.user.buildingIds);
-    console.log("BUILDING IDS TYPE:", typeof req.user.buildingIds);
-    console.log(
-      "BUILDING IDS ARRAY:",
-      Array.isArray(req.user.buildingIds)
-    );
-
-
-    const { period, assetId } = req.query;
+    const { period, assetId, buildingId } = req.query;
 
     if (period && !["month", "quarter", "year"].includes(period)) {
       return res.status(400).json({
-        message: "Parametro period non valido",
-        allowed: ["month", "quarter", "year"]
+        message: "Parametro period non valido"
+      });
+    }
+
+    if (
+      buildingId &&
+      !req.user.buildingIds.some(id => id.equals(buildingId))
+    ) {
+      return res.status(403).json({
+        message: "Accesso non autorizzato a questo edificio"
       });
     }
 
     const interventions = await getInterventionsQuery({
       buildingIds: req.user.buildingIds,
+      buildingId,
       assetId,
       period
     });

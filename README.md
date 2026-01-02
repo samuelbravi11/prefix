@@ -176,7 +176,11 @@ Avvia il proxy che:
 * inoltra le richieste al server interno
 
 ```bash
-npm run start_proxy
+# Linux / macOS
+npm run start_proxy:unix
+
+# Windows
+npm run start_proxy:win
 ```
 
 ---
