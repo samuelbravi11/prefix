@@ -36,6 +36,7 @@ tags:
   - name: Auth
   - name: Users
   - name: Buildings
+  - name: Dashboard
   - name: Events
   - name: Interventions
   - name: Requests
@@ -257,6 +258,87 @@ paths:
           description: Non autenticato
         "403":
           description: Accesso negato
+
+
+  # =====================
+  # BUILDINGS
+  # =====================  
+  /api/v1/dashboard/stats:
+    get:
+      tags: [Dashboard]
+      summary: Statistiche interventi
+      description: |
+        **Ruolo richiesto:** Utente registrato
+        Restituisce statistiche aggregate sugli interventi di manutenzione.
+
+        Le statistiche possono essere calcolate:
+        - su **tutti gli edifici associati all’utente**
+        - su **un singolo edificio**
+        - su **più edifici selezionati**
+
+        L’aggregazione temporale varia in base al periodo selezionato:
+
+        | Periodo  | Granularità |
+        |---------|-------------|
+        | month   | Giornaliera |
+        | quarter | Settimanale |
+        | year    | Mensile |
+
+        ### Permessi
+        - **Permesso richiesto:** `dashboard:view`
+        - L’utente può richiedere **solo edifici a lui associati**
+        - In caso contrario → **403 Forbidden**
+      parameters:
+        - name: period
+          in: query
+          required: true
+          description: |
+            Periodo di riferimento per le statistiche.
+            Determina anche la granularità temporale dei dati.
+          schema:
+            type: string
+            enum: [month, quarter, year]
+
+        - name: buildingId
+          in: query
+          required: false
+          description: |
+            ID di un singolo edificio.
+            Se specificato, sovrascrive `buildingIds`.
+          schema:
+            type: string
+
+        - name: buildingIds
+          in: query
+          required: false
+          description: |
+            Lista di edifici su cui calcolare le statistiche.
+            Formato: stringa separata da virgole.
+
+            Esempio:
+            `?buildingIds=ID1,ID2,ID3`
+          schema:
+            type: string
+            example: "00001,00002,00003"
+
+      responses:
+        "200":
+          description: Statistiche aggregate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStatsResponse"
+
+        "400":
+          description: Parametri non validi
+
+        "401":
+          description: Non autenticato
+
+        "403":
+          description: |
+            Accesso negato.
+            Uno o più edifici richiesti non sono associati all’utente.
 
 
   # =====================
@@ -663,6 +745,136 @@ components:
           type: string
         name:
           type: string
+
+    DashboardStatsResponse:
+      type: object
+      properties:
+        meta:
+          type: object
+          description: Metadati della richiesta
+          properties:
+            period:
+              type: string
+              enum: [month, quarter, year]
+            granularity:
+              type: string
+              enum: [day, week, month]
+            buildings:
+              type: array
+              description: Edifici considerati nel calcolo
+              items:
+                type: string
+            from:
+              type: string
+              format: date-time
+            to:
+              type: string
+              format: date-time
+
+        totals:
+          type: object
+          description: Conteggi assoluti
+          properties:
+            total:
+              type: integer
+              example: 42
+
+            byType:
+              type: object
+              properties:
+                maintenance:
+                  type: integer
+                inspection:
+                  type: integer
+                repair:
+                  type: integer
+                failure:
+                  type: integer
+
+            bySeverity:
+              type: object
+              properties:
+                low:
+                  type: integer
+                medium:
+                  type: integer
+                high:
+                  type: integer
+
+        percentages:
+          type: object
+          description: Percentuali calcolate sul totale
+          properties:
+            byTypePct:
+              type: object
+              properties:
+                maintenance:
+                  type: number
+                  format: float
+                  example: 52.38
+                inspection:
+                  type: number
+                  format: float
+                repair:
+                  type: number
+                  format: float
+                failure:
+                  type: number
+                  format: float
+
+            bySeverityPct:
+              type: object
+              properties:
+                low:
+                  type: number
+                  format: float
+                medium:
+                  type: number
+                  format: float
+                high:
+                  type: number
+                  format: float
+
+        timeline:
+          type: array
+          description: |
+            Serie temporale aggregata.
+            La chiave `date` cambia formato in base al periodo:
+            - `YYYY-MM-DD` → month
+            - `YYYY-Www` → quarter (settimana ISO)
+            - `YYYY-MM` → year
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                example: "2025-01-15"
+
+              total:
+                type: integer
+
+              byType:
+                type: object
+                properties:
+                  maintenance:
+                    type: integer
+                  inspection:
+                    type: integer
+                  repair:
+                    type: integer
+                  failure:
+                    type: integer
+
+              bySeverity:
+                type: object
+                properties:
+                  low:
+                    type: integer
+                  medium:
+                    type: integer
+                  high:
+                    type: integer
+
 
     Event:
       type: object

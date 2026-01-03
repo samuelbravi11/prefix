@@ -1,20 +1,44 @@
+// src/services/dateRanges.service.js
+
+/**
+ * period:
+ * - month   -> last 30 days circa (qui: 1 mese calendario indietro)
+ * - quarter -> last 3 mesi
+ * - year    -> last 12 mesi
+ */
 export function getDateRange(period) {
-  const now = new Date();
-  const from = new Date(now);
+  const to = new Date();
+  const from = new Date(to);
 
   switch (period) {
     case "month":
-      from.setMonth(now.getMonth() - 1);
+      from.setMonth(to.getMonth() - 1);
       break;
     case "quarter":
-      from.setMonth(now.getMonth() - 3);
+      from.setMonth(to.getMonth() - 3);
       break;
     case "year":
-      from.setFullYear(now.getFullYear() - 1);
+      from.setFullYear(to.getFullYear() - 1);
       break;
     default:
       throw new Error("Periodo non valido");
   }
 
-  return { from, to: now };
+  return { from, to };
+}
+
+/**
+ * Ritorna la granularità coerente col periodo.
+ */
+export function getGranularity(period) {
+  switch (period) {
+    case "month":
+      return "day";
+    case "quarter":
+      return "week";
+    case "year":
+      return "month";
+    default:
+      return "day";
+  }
 }

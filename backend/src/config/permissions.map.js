@@ -27,9 +27,10 @@ export const PERMISSION_MAP = {
   "GET /api/v1/events": "events:view",
   "GET /api/v1/events/:id": "events:view",
 
-  "GET /api/v1/interventions": "dashboard:view",
-  "GET /api/v1/interventions/:id": "dashboard:view",
-  "GET /api/v1/stats": "dashboard:view",
+  "GET /api/v1/interventions": "interventions:view",
+  "GET /api/v1/interventions/:id": "interventions:view",
+
+  "GET /api/v1/dashboard/stats": "dashboard:view",
   
   "GET /api/v1/buildings": "buildings:view_associated",
 
