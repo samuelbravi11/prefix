@@ -1,30 +1,24 @@
 // src/controllers/dashboard.controller.js
 import { getDateRange, getGranularity } from "../services/dateRanges.service.js";
 import { getInterventionsStatsAggregation } from "../repositories/stats.repository.js";
+import { parseCsvIds } from "../utils/queryParsing.js";
 
 /**
  * GET /api/v1/dashboard/stats
  *
  * Query params:
  * - period (required): month|quarter|year
- * - buildingId (optional): singolo id
- * - buildingIds (optional): lista (comma-separated o ripetuta)
+ * - buildingIds (optional, CSV): "id1,id2,id3"
  *
- * Output:
- * - totals (counts)
- * - percentages (byTypePct/bySeverityPct)
- * - timeline (bucketizzati)
+ * Regole:
+ * - se buildingIds è omesso -> usa tutti i buildings associati all’utente (req.user.buildingIds)
+ * - se buildingIds contiene un id non associato -> 403
  */
 export async function getStats(req, res) {
   try {
-    const { period, buildingId } = req.query;
+    const { period } = req.query;
 
-    // buildingIds può arrivare come:
-    // - stringa "a,b,c"
-    // - array ["a","b"]
-    let buildingIds = req.query.buildingIds;
-
-    // ---- Validazioni base ----
+    // ---- Validazione period ----
     if (!period || !["month", "quarter", "year"].includes(period)) {
       return res.status(400).json({
         message: "Parametro period non valido",
@@ -32,46 +26,54 @@ export async function getStats(req, res) {
       });
     }
 
-    // ---- Normalizzazione buildingIds input ----
-    if (buildingId) {
-      buildingIds = [buildingId];
-    } else if (typeof buildingIds === "string") {
-      buildingIds = buildingIds.split(",").map((s) => s.trim()).filter(Boolean);
-    } else if (Array.isArray(buildingIds)) {
-      buildingIds = buildingIds.map((s) => String(s).trim()).filter(Boolean);
-    } else {
-      // default: tutti i buildings associati all'utente
-      buildingIds = (req.user.buildingIds || []).map((id) => id.toString());
-    }
+    // ---- buildingIds: solo CSV (o default user buildings) ----
+    const requestedBuildingIds = parseCsvIds(req.query.buildingIds);
 
-    // se ancora vuoto -> niente dati, ma risposta coerente
+    const userBuildingIds = (req.user.buildingIds || []).map((id) =>
+      id.toString()
+    );
+
+    // default: tutti gli edifici associati
+    const buildingIds = requestedBuildingIds.length
+      ? requestedBuildingIds
+      : userBuildingIds;
+
+    // se utente non ha edifici associati (o lista vuota) -> risposta coerente
     if (!buildingIds.length) {
       return res.json({
         meta: {
           period,
           granularity: getGranularity(period),
-          buildings: [],
+          buildingIds: [],
           from: null,
           to: null,
         },
-        totals: { total: 0, byType: {}, bySeverity: {} },
-        percentages: { byTypePct: {}, bySeverityPct: {} },
+        totals: {
+          total: 0,
+          byType: { maintenance: 0, inspection: 0, repair: 0, failure: 0 },
+          bySeverity: { low: 0, medium: 0, high: 0 },
+        },
+        percentages: {
+          byTypePct: { maintenance: 0, inspection: 0, repair: 0, failure: 0 },
+          bySeverityPct: { low: 0, medium: 0, high: 0 },
+        },
         timeline: [],
       });
     }
 
-    // ---- 403: controllo accesso building ----
-    const userBuildings = (req.user.buildingIds || []).map((id) => id.toString());
-    const notAllowed = buildingIds.filter((id) => !userBuildings.includes(id));
+    // ---- 403: buildingIds richiesti devono essere subset dei buildingIds utente ----
+    const notAllowed = buildingIds.filter((id) => !userBuildingIds.includes(id));
     if (notAllowed.length) {
       return res.status(403).json({
-        message: "Accesso negato: uno o più edifici non sono associati all’utente",
+        message:
+          "Accesso negato: uno o più edifici non sono associati all’utente",
         notAllowedBuildingIds: notAllowed,
       });
     }
 
     // ---- Date range + aggregation ----
     const { from, to } = getDateRange(period);
+
     const { totals, timeline } = await getInterventionsStatsAggregation({
       buildingIds,
       period,
@@ -79,10 +81,10 @@ export async function getStats(req, res) {
       to,
     });
 
-    // ---- Percentuali (calcolo backend: una sola volta) ----
+    // ---- Percentuali (calcolo una sola volta) ----
     const total = totals.total || 0;
-
-    const pct = (value) => (total ? Number(((value / total) * 100).toFixed(2)) : 0);
+    const pct = (value) =>
+      total ? Number(((value / total) * 100).toFixed(2)) : 0;
 
     const byTypePct = {
       maintenance: pct(totals.byType.maintenance || 0),
@@ -101,15 +103,12 @@ export async function getStats(req, res) {
       meta: {
         period,
         granularity: getGranularity(period),
-        buildings: buildingIds,
+        buildingIds,
         from: from.toISOString(),
         to: to.toISOString(),
       },
       totals,
-      percentages: {
-        byTypePct,
-        bySeverityPct,
-      },
+      percentages: { byTypePct, bySeverityPct },
       timeline,
     });
   } catch (err) {

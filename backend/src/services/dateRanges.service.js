@@ -7,28 +7,31 @@
  * - year    -> last 12 mesi
  */
 export function getDateRange(period) {
-  const to = new Date();
-  const from = new Date(to);
+  const now = new Date();
+  const from = new Date(now);
 
   switch (period) {
     case "month":
-      from.setMonth(to.getMonth() - 1);
+      from.setMonth(now.getMonth() - 1);
       break;
     case "quarter":
-      from.setMonth(to.getMonth() - 3);
+      from.setMonth(now.getMonth() - 3);
       break;
     case "year":
-      from.setFullYear(to.getFullYear() - 1);
+      from.setFullYear(now.getFullYear() - 1);
       break;
     default:
       throw new Error("Periodo non valido");
   }
 
-  return { from, to };
+  return { from, to: now };
 }
 
 /**
- * Ritorna la granularità coerente col periodo.
+ * Granularity utile per il frontend (come interpretare timeline):
+ * - month   -> day
+ * - quarter -> week
+ * - year    -> month
  */
 export function getGranularity(period) {
   switch (period) {
@@ -39,6 +42,6 @@ export function getGranularity(period) {
     case "year":
       return "month";
     default:
-      return "day";
+      return null;
   }
 }

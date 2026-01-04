@@ -3,21 +3,38 @@ import mongoose from "mongoose";
 import { Intervention } from "../models/Intervention.js";
 
 /**
- * Costruisce il match base:
+ * Cast safe a ObjectId (ignora id falsi).
+ * Nota: in controller fai già validazione/403,
+ * qui facciamo solo cast.
+ */
+function toObjectIds(ids) {
+  return ids
+    .map((id) => {
+      try {
+        return new mongoose.Types.ObjectId(id);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+/**
+ * Match base:
  * - buildingId in lista
  * - performedAt tra from e to
  */
 function buildMatch({ buildingIds, from, to }) {
   return {
-    buildingId: { $in: buildingIds.map((id) => new mongoose.Types.ObjectId(id)) },
+    buildingId: { $in: toObjectIds(buildingIds) },
     performedAt: { $gte: from, $lte: to },
   };
 }
 
 /**
- * Costruisce il groupId (bucket) in base al period:
+ * GroupId per timeline bucket:
  * - month   -> YYYY-MM-DD (giorno)
- * - quarter -> YYYY-Www (settimana ISO)
+ * - quarter -> ISO week (YYYY-Www)
  * - year    -> YYYY-MM (mese)
  */
 function buildTimelineGroupId(period) {
@@ -33,8 +50,7 @@ function buildTimelineGroupId(period) {
     };
   }
 
-  // quarter -> settimana ISO (YYYY-Www)
-  // Usiamo isoWeekYear + isoWeek e poi comporremo la stringa.
+  // quarter -> settimana ISO
   return {
     isoYear: { $isoWeekYear: "$performedAt" },
     isoWeek: { $isoWeek: "$performedAt" },
@@ -42,10 +58,9 @@ function buildTimelineGroupId(period) {
 }
 
 /**
- * Pipeline stats completa (timeline + totals).
- * Restituisce un oggetto con:
- *  - totals (conteggi globali byType/bySeverity + total)
- *  - timeline (bucketizzati in base al periodo)
+ * Aggregazione stats:
+ * - totals: conteggi globali (byType/bySeverity/total)
+ * - timeline: bucketizzati in base al periodo
  */
 export async function getInterventionsStatsAggregation({
   buildingIds,
@@ -60,10 +75,9 @@ export async function getInterventionsStatsAggregation({
     $group: {
       _id: timelineGroupId,
 
-      // totale per bucket
       total: { $sum: 1 },
 
-      // byType (enum: maintenance, inspection, failure, repair)
+      // byType
       maintenance: {
         $sum: { $cond: [{ $eq: ["$type", "maintenance"] }, 1, 0] },
       },
@@ -77,16 +91,18 @@ export async function getInterventionsStatsAggregation({
         $sum: { $cond: [{ $eq: ["$type", "repair"] }, 1, 0] },
       },
 
-      // bySeverity (enum: low, medium, high) - opzionale (può essere null)
+      // bySeverity
       low: { $sum: { $cond: [{ $eq: ["$severity", "low"] }, 1, 0] } },
       medium: { $sum: { $cond: [{ $eq: ["$severity", "medium"] }, 1, 0] } },
       high: { $sum: { $cond: [{ $eq: ["$severity", "high"] }, 1, 0] } },
     },
   };
 
-  // Proiezione timeline in un formato uniforme
-  // - month/year: _id.date già pronto
-  // - quarter: devo costruire "YYYY-Www"
+  /**
+   * Project timeline:
+   * - month/year: _id.date è già stringa
+   * - quarter: compongo "YYYY-Www"
+   */
   const timelineProjectStage =
     period === "quarter"
       ? {
@@ -138,10 +154,7 @@ export async function getInterventionsStatsAggregation({
           },
         };
 
-  const timelineSortStage =
-    period === "month" || period === "year"
-      ? { $sort: { date: 1 } }
-      : { $sort: { date: 1 } };
+  const timelineSortStage = { $sort: { date: 1 } };
 
   const totalsGroupStage = {
     $group: {
@@ -158,9 +171,7 @@ export async function getInterventionsStatsAggregation({
       repair: { $sum: { $cond: [{ $eq: ["$type", "repair"] }, 1, 0] } },
 
       low: { $sum: { $cond: [{ $eq: ["$severity", "low"] }, 1, 0] } },
-      medium: {
-        $sum: { $cond: [{ $eq: ["$severity", "medium"] }, 1, 0] },
-      },
+      medium: { $sum: { $cond: [{ $eq: ["$severity", "medium"] }, 1, 0] } },
       high: { $sum: { $cond: [{ $eq: ["$severity", "high"] }, 1, 0] } },
     },
   };
@@ -194,7 +205,8 @@ export async function getInterventionsStatsAggregation({
   ];
 
   const [result] = await Intervention.aggregate(pipeline);
-  const totals = (result?.totals && result.totals[0]) || {
+
+  const totals = result?.totals?.[0] || {
     total: 0,
     byType: { maintenance: 0, inspection: 0, repair: 0, failure: 0 },
     bySeverity: { low: 0, medium: 0, high: 0 },

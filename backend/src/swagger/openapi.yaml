@@ -99,7 +99,7 @@ paths:
       tags: [Auth]
       summary: Utente corrente
       description: |
-        **Ruolo richiesto:** Utente registrato
+        **Ruolo richiesto:** Utente registrato. 
         Restituisce i dettagli dell'utente corrente
       responses:
         "200":
@@ -120,7 +120,7 @@ paths:
       tags: [Users]
       summary: Lista utenti
       description: |
-        **Ruolo richiesto:** Admin Centrale
+        **Ruolo richiesto:** Admin Centrale. 
         Restituisce la lista di tutti gli utenti
       responses:
         "200":
@@ -141,7 +141,7 @@ paths:
       tags: [Users]
       summary: Profilo utente
       description: |
-        **Ruolo richiesto:** Utente registrato
+        **Ruolo richiesto:** Utente registrato. 
         Restituisce i dettagli area personale dell'utente corrente
       responses:
         "200":
@@ -158,7 +158,7 @@ paths:
       tags: [Users]
       summary: Utenti in attesa
       description: |
-        **Ruolo richiesto:** Admin Centrale
+        **Ruolo richiesto:** Admin Centrale. 
         Restituisce la lista di tutti gli utenti in stato di pending
       responses:
         "200":
@@ -179,7 +179,7 @@ paths:
       tags: [Users]
       summary: Assegna ruolo
       description: |
-        **Ruolo richiesto:** Admin Centrale
+        **Ruolo richiesto:** Admin Centrale. 
         Assegna un ruolo ad un particolare utente
       parameters:
         - $ref: "#/components/parameters/UserId"
@@ -208,7 +208,7 @@ paths:
       tags: [Users]
       summary: Assegna edifici
       description: |
-        **Ruolo richiesto:** Admin Centrale
+        **Ruolo richiesto:** Admin Centrale. 
         Assegna un edificio ad un particolare utente
       parameters:
         - $ref: "#/components/parameters/UserId"
@@ -243,7 +243,7 @@ paths:
       tags: [Buildings]
       summary: Edifici associati
       description: |
-        **Ruolo richiesto:** Utente registrato
+        **Ruolo richiesto:** Utente registrato. 
         Restituisce tutti i buildings a cui un utente è associato
       responses:
         "200":
@@ -261,20 +261,19 @@ paths:
 
 
   # =====================
-  # BUILDINGS
+  # DASHBOARD
   # =====================  
   /api/v1/dashboard/stats:
     get:
       tags: [Dashboard]
       summary: Statistiche interventi
       description: |
-        **Ruolo richiesto:** Utente registrato
+        **Ruolo richiesto:** Utente registrato. 
         Restituisce statistiche aggregate sugli interventi di manutenzione.
 
         Le statistiche possono essere calcolate:
         - su **tutti gli edifici associati all’utente**
-        - su **un singolo edificio**
-        - su **più edifici selezionati**
+        - su **uno o più edifici selezionati**
 
         L’aggregazione temporale varia in base al periodo selezionato:
 
@@ -298,15 +297,6 @@ paths:
           schema:
             type: string
             enum: [month, quarter, year]
-
-        - name: buildingId
-          in: query
-          required: false
-          description: |
-            ID di un singolo edificio.
-            Se specificato, sovrascrive `buildingIds`.
-          schema:
-            type: string
 
         - name: buildingIds
           in: query
@@ -349,17 +339,25 @@ paths:
       tags: [Events]
       summary: Lista eventi
       description: |
-        **Ruolo richiesto:** Utente registrato
-        Restituisce gli eventi di manutenzione associati agli edifici dell’utente.
+        **Ruolo richiesto:** Utente registrato. 
+        Restituisce gli eventi di manutenzione associati
+        agli edifici dell’utente.
 
-        ### Filtro per edificio
-        - Se `buildingId` non è specificato → eventi di **tutti** gli edifici associati all’utente
-        - Se `buildingId` è specificato → eventi **solo** di quell’edificio
-
-        ### Vista calendario
-        - `type=calendar` restituisce solo eventi pianificati (`scheduledAt != null`)
+        È possibile filtrare:
+        - per uno o più edifici
+        - per eventi futuri
+        - per vista calendario
       parameters:
-        - name: type
+        - name: buildingIds
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            Lista di ID edifici separati da virgola.
+            Esempio: buildingIds=id1,id2,id3
+
+        - name: view
           in: query
           required: false
           schema:
@@ -367,16 +365,10 @@ paths:
             enum: [calendar, future]
           description: |
             Vista degli eventi:
-            - assente → registro completo
-            - calendar → eventi pianificati
-            - future → solo eventi futuri (scheduledAt >= now)
+            - calendar → solo eventi con `scheduledAt != null`
+            - future → solo eventi con `scheduledAt >= now`
 
-        - name: buildingId
-          in: query
-          required: false
-          schema:
-            type: string
-          description: ID dell’edificio
+
       responses:
         "200":
           description: Lista eventi
@@ -389,7 +381,9 @@ paths:
         "401":
           description: Non autenticato
         "403":
-          description: Accesso non autorizzato all’edificio
+          description: Accesso negato agli edifici richiesti
+        "500":
+          description: Errore interno server
 
 
   /api/v1/events/{id}:
@@ -397,8 +391,8 @@ paths:
       tags: [Events]
       summary: Dettaglio evento
       description: |
-        **Ruolo richiesto:** Utente registrato
-        Restituisce il dettaglio di un singolo evento
+        **Ruolo richiesto:** Utente registrato. .  
+        Restituisce il dettaglio di un singolo evento.
       parameters:
         - $ref: "#/components/parameters/EventId"
       responses:
@@ -410,8 +404,12 @@ paths:
                 $ref: "#/components/schemas/Event"
         "401":
           description: Non autenticato
+        "403":
+          description: Accesso negato
         "404":
           description: Evento non trovato
+        "500":
+          description: Errore interno server
 
 
 # =====================
@@ -422,47 +420,58 @@ paths:
       tags: [Interventions]
       summary: Storico interventi
       description: |
-        **Ruolo richiesto:** Utente registrato
-        Restituisce lo storico degli interventi associati agli edifici dell’utente.
+        **Ruolo richiesto:** Utente registrato.
+
+        Restituisce lo storico degli interventi di manutenzione
+        associati agli edifici dell’utente.
 
         ### Modalità di utilizzo
-        - **Senza parametri:** tutti gli interventi (storico completo)
-        - **Con `period`:** interventi filtrati per periodo
-        - **Con `assetId`:** interventi relativi a uno specifico asset
-        - **Con `buildingId`:** interventi relativi a uno specifico edificio
-        - **Parametri combinabili**
+        - **Senza parametri:** tutti gli interventi degli edifici associati
+        - **Con `buildingIds`:** interventi di uno o più edifici
+        - **Con `assetId`:** interventi di un asset specifico
+        - **Con `period`:** interventi filtrati per periodo temporale
+        - **Tutti i filtri sono combinabili**
 
         ### Sicurezza
-        Se viene passato `buildingId`, deve appartenere agli edifici associati all’utente.
+        - L’utente può richiedere **solo edifici a lui associati**
+        - In caso contrario → **403 Forbidden**
+
       parameters:
-        - name: buildingId
+        - name: buildingIds
           in: query
           required: false
-          description: |
-            ID dell’edificio per filtrare gli interventi.
-            Deve essere uno degli edifici associati all’utente.
           schema:
             type: string
+          description: |
+            Lista di ID edifici separati da virgola.
+
+            Esempi:
+            - `buildingIds=ID1`
+            - `buildingIds=ID1,ID2,ID3`
+
+            Se omesso, vengono considerati **tutti gli edifici associati all’utente**.
 
         - name: assetId
           in: query
           required: false
-          description: ID dell’asset per filtrare gli interventi
           schema:
             type: string
+          description: |
+            ID dell’asset.
+            Se specificato, restituisce solo gli interventi
+            relativi a quell’asset.
 
         - name: period
           in: query
           required: false
-          description: |
-            Filtro temporale sugli interventi.
-            Valori ammessi:
-            - `month` → ultimo mese
-            - `quarter` → ultimo trimestre
-            - `year` → ultimo anno
           schema:
             type: string
             enum: [month, quarter, year]
+          description: |
+            Filtro temporale sugli interventi:
+            - `month` → ultimo mese
+            - `quarter` → ultimo trimestre
+            - `year` → ultimo anno
 
       responses:
         "200":
@@ -473,12 +482,19 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Intervention"
+
         "400":
           description: Parametri non validi
+
         "401":
           description: Non autenticato
+
         "403":
-          description: Non autorizzato
+          description: Accesso negato a uno o più edifici richiesti
+
+        "500":
+          description: Errore interno server
+
 
 
   /api/v1/interventions/{id}:
@@ -513,7 +529,7 @@ paths:
       tags: [Requests]
       summary: Lista richieste
       description: |
-        **Ruolo richiesto:** Admin Centrale
+        **Ruolo richiesto:** Admin Centrale. 
         Restituisce la lista di tutte le richieste presenti nel sistema.
       responses:
         "200":
@@ -556,7 +572,7 @@ paths:
       tags: [Requests]
       summary: Richiesta assegnazione ruolo
       description: |
-        **Ruolo richiesto:** Utente secondario
+        **Ruolo richiesto:** Utente secondario. 
         Permette a un utente di inviare una richiesta
         per l’assegnazione di un ruolo.
       requestBody:
@@ -584,7 +600,7 @@ paths:
       tags: [Requests]
       summary: Richiesta assegnazione edificio
       description: |
-        **Ruolo richiesto:** Utente secondario
+        **Ruolo richiesto:** Utente secondario. 
         Permette a un utente di inviare una richiesta
         per l’assegnazione a un edificio.
       requestBody:
@@ -616,7 +632,7 @@ paths:
       tags: [Notifications]
       summary: Notifiche utente
       description: |
-        **Ruolo richiesto:** Utente registrato
+        **Ruolo richiesto:** Utente registrato. 
       parameters:
         - name: not_read
           in: query
@@ -636,7 +652,7 @@ paths:
       tags: [Notifications]
       summary: Segna come letta
       description: |
-        **Ruolo richiesto:** Utente registrato
+        **Ruolo richiesto:** Utente registrato. 
         Segna una particolare notifica come letta
       parameters:
         - $ref: "#/components/parameters/NotificationId"
@@ -651,7 +667,7 @@ paths:
       tags: [Notifications]
       summary: Segna tutte come lette
       description: |
-        **Ruolo richiesto:** Utente registrato
+        **Ruolo richiesto:** Utente registrato. 
         Segna tutte le notifiche come lette
       responses:
         "200":
