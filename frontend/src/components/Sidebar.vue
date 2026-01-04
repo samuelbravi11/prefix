@@ -41,7 +41,7 @@
             exact-active-class="active-link" @click="setPageTitle('Edifici affidati')">
             <div class="d-flex align-items-center">
               <i class="bi bi-building icon-azure me-3 flex-shrink-0"></i>
-              <span class="sidebar-text">Edifici affidati</span>
+              <span class="sidebar-text">Seleziona Edifici</span>
             </div>
           </router-link>
         </li>
@@ -50,7 +50,7 @@
       <!-- Titolo Sede -->
       <ul class="nav flex-column mt-4">
         <li class="nav-item mb-2 px-3">
-          <h6 class="text-uppercase small fw-semibold mb-0">Povo 1</h6>
+          <h6 class="text-uppercase small fw-semibold mb-0">visualizzazioni</h6>
         </li>
       </ul>
 
@@ -109,6 +109,15 @@
               <span class="sidebar-text">Impostazioni</span>
             </div>
           </a>
+        </li>
+        <li class="nav-item">
+          <router-link to="/notifiche" class="nav-link sidebar-link" active-class="active-link"
+            exact-active-class="active-link" @click="setPageTitle('Notifiche')">
+            <div class="d-flex align-items-center">
+              <i class="bi bi-bell icon-azure me-3 flex-shrink-0"></i>
+              <span class="sidebar-text">Notifiche</span>
+            </div>
+          </router-link>
         </li>
       </ul>
     </div>

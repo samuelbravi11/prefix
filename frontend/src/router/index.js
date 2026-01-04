@@ -74,6 +74,11 @@ const routes = [
         name: "visualizzazione-tabellare",
         component: () => import("@/views/VisualizzazioneTabellare.vue"),
       },
+      {
+        path: "notifiche",
+        name: "notifiche",
+        component: () => import("@/views/Notifiche.vue"),
+      },
     ],
   },
 ];
