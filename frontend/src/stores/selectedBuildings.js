@@ -1,8 +1,15 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 export const useSelectedBuildingsStore = defineStore('selectedBuildings', () => {
-  const selectedIds = ref([])
+  // Carica da localStorage all'inizializzazione
+  const storedIds = localStorage.getItem('selectedBuildingIds')
+  const selectedIds = ref(storedIds ? JSON.parse(storedIds) : [])
+
+  // Salva in localStorage ogni volta che cambia
+  watch(selectedIds, (newIds) => {
+    localStorage.setItem('selectedBuildingIds', JSON.stringify(newIds))
+  }, { deep: true })
 
   const setSelectedBuildings = (ids) => {
     selectedIds.value = ids

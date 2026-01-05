@@ -131,12 +131,12 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth.store";
-import { useSelectedBuildingsStore } from '@/stores/selectedBuildings'; // AGGIUNTO
+import { useSelectedBuildingsStore } from '@/stores/selectedBuildings';
 import { login as loginService } from "@/api/authService.js";
-import axios from "axios"; // AGGIUNTO
+import axios from "axios";
 import bgImage from "../assets/images/login_image.jpg";
 
 const email = ref("");
@@ -145,9 +145,17 @@ const showPassword = ref(false);
 const loading = ref(false);
 const router = useRouter();
 const authStore = useAuthStore();
-const selectedBuildingsStore = useSelectedBuildingsStore(); // AGGIUNTO
+const selectedBuildingsStore = useSelectedBuildingsStore();
 
-// Funzione per ottenere tutti gli edifici
+// Controlla se l'utente è già loggato al caricamento della pagina
+onMounted(() => {
+  const token = localStorage.getItem("accessToken");
+  if (token) {
+    // Se c'è un token, l'utente è già loggato
+    initializeSelectedBuildings();
+  }
+});
+
 async function fetchAllBuildings() {
   try {
     const token = localStorage.getItem("accessToken");
@@ -164,6 +172,19 @@ async function fetchAllBuildings() {
   }
 }
 
+// Funzione per inizializzare gli edifici selezionati
+async function initializeSelectedBuildings() {
+  // Se già ci sono edifici selezionati, non fare nulla
+  if (selectedBuildingsStore.selectedIds.length > 0) return;
+  
+  const buildings = await fetchAllBuildings();
+  if (buildings.length > 0) {
+    const buildingIds = buildings.map(b => b._id);
+    selectedBuildingsStore.setSelectedBuildings(buildingIds);
+    console.log(`Inizializzati ${buildingIds.length} edifici dopo refresh`);
+  }
+}
+
 async function login() {
   if (!email.value || !password.value) {
     alert("Inserisci email e password");
@@ -173,29 +194,14 @@ async function login() {
   loading.value = true;
 
   try {
-    // 1. Effettua il login
     const response = await loginService(email.value, password.value);
     localStorage.setItem("accessToken", response.data.accessToken);
     
-    // 2. Carica i dati dell'utente
     await authStore.fetchMe();
     
-    // 3. Ottieni tutti gli edifici disponibili
-    const buildings = await fetchAllBuildings();
+    // Usa la stessa funzione per inizializzare
+    await initializeSelectedBuildings();
     
-    if (buildings.length > 0) {
-      // 4. Estrai tutti gli ID degli edifici
-      const buildingIds = buildings.map(b => b._id);
-      
-      // 5. Popola lo store selectedBuildings con tutti gli edifici
-      selectedBuildingsStore.setSelectedBuildings(buildingIds);
-      
-      console.log(`Selezionati automaticamente ${buildingIds.length} edifici`);
-    } else {
-      console.log("Nessun edificio disponibile");
-    }
-    
-    // 6. Reindirizza alla dashboard
     router.push("/");
     
   } catch (error) {
