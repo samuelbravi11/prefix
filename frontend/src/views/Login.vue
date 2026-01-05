@@ -71,9 +71,7 @@
               </div>
 
               <div class="d-flex justify-content-between align-items-center mb-4">
-                <div>
-                  
-                </div>
+                <div></div>
                 <router-link to="/forgot-password" class="text-primary text-decoration-none small">
                   Password dimenticata?
                 </router-link>
@@ -136,7 +134,9 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth.store";
+import { useSelectedBuildingsStore } from '@/stores/selectedBuildings'; // AGGIUNTO
 import { login as loginService } from "@/api/authService.js";
+import axios from "axios"; // AGGIUNTO
 import bgImage from "../assets/images/login_image.jpg";
 
 const email = ref("");
@@ -145,6 +145,24 @@ const showPassword = ref(false);
 const loading = ref(false);
 const router = useRouter();
 const authStore = useAuthStore();
+const selectedBuildingsStore = useSelectedBuildingsStore(); // AGGIUNTO
+
+// Funzione per ottenere tutti gli edifici
+async function fetchAllBuildings() {
+  try {
+    const token = localStorage.getItem("accessToken");
+    const response = await axios.get("/api/v1/buildings", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Errore nel caricamento degli edifici:", error);
+    return [];
+  }
+}
 
 async function login() {
   if (!email.value || !password.value) {
@@ -155,10 +173,31 @@ async function login() {
   loading.value = true;
 
   try {
+    // 1. Effettua il login
     const response = await loginService(email.value, password.value);
     localStorage.setItem("accessToken", response.data.accessToken);
+    
+    // 2. Carica i dati dell'utente
     await authStore.fetchMe();
+    
+    // 3. Ottieni tutti gli edifici disponibili
+    const buildings = await fetchAllBuildings();
+    
+    if (buildings.length > 0) {
+      // 4. Estrai tutti gli ID degli edifici
+      const buildingIds = buildings.map(b => b._id);
+      
+      // 5. Popola lo store selectedBuildings con tutti gli edifici
+      selectedBuildingsStore.setSelectedBuildings(buildingIds);
+      
+      console.log(`Selezionati automaticamente ${buildingIds.length} edifici`);
+    } else {
+      console.log("Nessun edificio disponibile");
+    }
+    
+    // 6. Reindirizza alla dashboard
     router.push("/");
+    
   } catch (error) {
     console.error("Errore login:", error);
     

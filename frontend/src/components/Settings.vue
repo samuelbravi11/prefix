@@ -40,8 +40,8 @@ watch(() => props.show, val => showLocal.value = val)
 watch(showLocal, val => emit('update:show', val))
 
 // Campi impostazioni
-const nome = ref('Mario Rossi')
-const email = ref('mario.rossi@example.com')
+const nome = ref('non ancora implementato')
+const email = ref('non ancora implementato')
 
 // Chiudi popup
 function close() {

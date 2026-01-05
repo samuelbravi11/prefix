@@ -40,7 +40,7 @@
           <router-link to="/Buildings-List" class="nav-link sidebar-link" active-class="active-link"
             exact-active-class="active-link" @click="setPageTitle('Edifici affidati')">
             <div class="d-flex align-items-center">
-              <i class="bi bi-building icon-azure me-3 flex-shrink-0"></i>
+              <i class="pi pi-building icon-azure me-3 flex-shrink-0"></i>
               <span class="sidebar-text">Seleziona Edifici</span>
             </div>
           </router-link>
