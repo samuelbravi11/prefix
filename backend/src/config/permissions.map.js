@@ -7,6 +7,9 @@ export const PERMISSION_MAP = {
   UTENTE ANONIMO
   ----------- */
   "POST /auth/register": "auth:register",
+  "POST /auth/verify-email": "auth:register",
+  "POST /auth/totp/setup": "auth:register",
+  "POST /auth/totp/verify": "auth:register",
 
 
   /* --------------

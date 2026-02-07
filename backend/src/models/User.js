@@ -1,5 +1,16 @@
 import mongoose from "mongoose";
 
+/**
+ * Enum onboarding: stato “tecnico” di registrazione.
+ * NON sostituisce lo status business (pending/active) che serve per approvazione Admin.
+ */
+const OnboardingStatus = {
+  EMAIL_VERIFICATION: "EMAIL_VERIFICATION",
+  TOTP_SETUP: "TOTP_SETUP",
+  DONE: "DONE",
+};
+
+
 const RefreshTokenSchema = new mongoose.Schema({
   //mi salvo l'hash del token per sicurezza --> il backend non deve mai salvare token in chiaro --> sicurezza in caso di data breach
   //lato client salvo il token in un httpOnly cookie --> prevenzione attacco XSS
@@ -72,33 +83,62 @@ const UserSchema = new mongoose.Schema({
     index: true
   }],
 
+  /**
+   * STATUS BUSINESS:
+   * - pending: registrato + TOTP ok, in attesa approvazione Admin Centrale
+   * - active: approvato
+   * - suspended/disabled: stati di blocco
+  */
   status: {
     type: String,
     enum: ["pending", "active", "suspended", "disabled"],
-    default: "pending",
-    index: true
+    default: "disabled", // <-- IMPORTANTE: durante onboarding lo teniamo disabled
+    index: true,
   },
-
-
-  /*
-  securityNumber: {
-    type: String,
-    required: true,
-    unique: true,
-  },
-  */
 
   fingerprintHash: {
     type: String,
     required: true
   },
 
-  /*
-  deviceFingerprint: {
-    type: String,
-    default: "",
+
+  // --------------------
+  // ONBOARDING REGISTRAZIONE
+  // --------------------
+  emailVerified: {
+    type: Boolean,
+    default: false,
+    index: true,
   },
-  */
+
+  onboardingStatus: {
+    type: String,
+    enum: Object.values(OnboardingStatus),
+    default: OnboardingStatus.EMAIL_VERIFICATION,
+    index: true,
+  },
+
+  /**
+   * OTP email: salviamo SOLO hash + scadenza (mai codice in chiaro)
+   */
+  emailOtpHash: { type: String, default: null },
+  emailOtpExpiresAt: { type: Date, default: null },
+
+  /**
+   * TOTP:
+   * - secret cifrato a riposo (AES-GCM)
+   * - enabled true solo dopo verify
+   */
+  totpEnabled: { type: Boolean, default: false },
+  totpSecretEnc: { type: String, default: null }, // base64 payload cifrato
+
+  /**
+   * Token a vita breve per legare setup->verify (opzionale ma consigliato)
+   * - salviamo hash + scadenza
+   */
+  totpSetupTokenHash: { type: String, default: null },
+  totpSetupTokenExpiresAt: { type: Date, default: null },
+
 
   createdAt: {
     type: Date,
@@ -120,20 +160,6 @@ const UserSchema = new mongoose.Schema({
 });
 
 
-
-/*
-  fingerprintHash: String,
-  deviceFingerprint: String,
-*/
-
-
-
-/*
-UserSchema.post("save", function(doc) {
-  console.log("Saved doc:", doc.email);
-});
-*/
-
 // Middleware per aggiornare updatedAt
 UserSchema.pre("save", function () {
   this.updatedAt = new Date();
@@ -142,4 +168,5 @@ UserSchema.pre("save", function () {
 
 const User = mongoose.model("User", UserSchema);
 
+export { OnboardingStatus };
 export default User;

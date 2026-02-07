@@ -1,11 +1,22 @@
-import { generateAccessToken, generateRefreshToken, verifyAccessToken, verifyRefreshToken } from "../services/token.service.js";
-import userService from "../services/user.service.js";
-import jwt from "jsonwebtoken";
+import User, { OnboardingStatus } from "../models/User.js";
+
 import bcrypt from "bcrypt";
-import crypto from "crypto";
-import User from "../models/User.js";
-import AuditLog from "../models/AuditLog.js";
-import Role from "../models/Role.js";
+import userService from "../services/user.service.js";
+
+import { generateEmailOtp, applyEmailOtpToUser } from "../services/emailOtp.service.js";
+import { sendEmailOtp } from "../services/email.service.js";
+import { signRegistrationToken } from "../services/registrationToken.service.js";
+
+import { verifyEmailOtp } from "../services/emailOtp.service.js";
+import {
+  generateTotpSecret,
+  applyTotpSecretToUser,
+  buildQrCodeDataUrl,
+  createAndApplyTotpSetupToken,
+  verifyTotpSetupToken,
+  verifyTotpCode,
+} from "../services/totp.service.js";
+
 
 function setRefreshTokenCookie(res, refreshToken) {
   res.cookie("refreshToken", refreshToken, {
@@ -20,60 +31,268 @@ function setRefreshTokenCookie(res, refreshToken) {
 /* ---------------------------------------------------
    REGISTRAZIONE
 --------------------------------------------------- */
+/**
+ * POST /auth/register
+ * - Pubblico
+ * - Crea utente in onboarding EMAIL_VERIFICATION
+ * - status business rimane "disabled" finché non finisce TOTP
+ * - genera OTP email e la invia
+ * - ritorna registrationToken per step successivi
+*/
 export async function register(req, res) {
   try {
     const { name, surname, email, password, fingerprintHash } = req.body;
 
     if (!name || !email || !password || !fingerprintHash) {
-      return res.status(400).json({ message: "Tutti i campi sono obbligatori" });
+      return res.status(400).json({
+        message: "Tutti i campi sono obbligatori",
+        required: ["name", "email", "password", "fingerprintHash"],
+      });
     }
 
-    const existing = await userService.findByEmail(email);
+    const normalizedEmail = String(email).toLowerCase().trim();
+
+    const existing = await userService.findByEmail(normalizedEmail);
     if (existing) {
       return res.status(409).json({ message: "Utente già registrato" });
     }
 
-    const pendingRole = await Role.findOne({ roleName: "pending" });
-    if (!pendingRole) {
-      return res.status(500).json({ message: "Ruolo pending non configurato" });
-    }
-
+    // password hash
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const newUser = await User.create({
+    // creo utente (onboarding)
+    const user = new User({
       name,
-      surname,
-      email,
+      surname: surname || "",
+      email: normalizedEmail,
+
+      emailVerified: false,
+      onboardingStatus: OnboardingStatus.EMAIL_VERIFICATION,
+
+      // durante onboarding NON è ancora pending
+      status: "disabled",
+
       fingerprintHash,
-      status: "pending",
-      roles: [pendingRole._id],
+
       auth: {
         passwordHash,
         lastPasswordChangeAt: new Date(),
-        refreshTokens: []
-      }
+        refreshTokens: [],
+      },
     });
 
-    await AuditLog.create({
-      entityType: "AUTH",
-      entityId: newUser._id,
-      action: "REGISTER",
-      byUser: newUser._id
-    });
+    // genera otp e salva hash+expiry sul doc
+    const otp = generateEmailOtp();
+    const { expiresAt } = applyEmailOtpToUser(user, otp);
+
+    await user.save();
+
+    console.log("[REGISTER] created user:", user._id.toString(), user.email);
+    console.log("[REGISTER] otp expiresAt:", expiresAt.toISOString());
+
+    // invio OTP con Resend
+    await sendEmailOtp({ to: user.email, otpCode: otp, expiresAt });
+
+    // registration token per proseguire onboarding
+    const registrationToken = signRegistrationToken({ userId: user._id.toString() });
 
     return res.status(201).json({
-      message: "Registrazione completata. In attesa di approvazione.",
-      user: {
-        id: newUser._id,
-        email: newUser.email
-      }
+      message: "Registrazione avviata. Verifica l'OTP email per continuare.",
+      registrationToken,
+      next: "POST /auth/verify-email",
     });
-
   } catch (err) {
     console.error("Errore registrazione:", err);
-    return res.status(500).json({ message: "Errore interno" });
+    return res.status(500).json({
+      message: "Errore interno registrazione",
+      error: err.message,
+    });
   }
 }
+
+
+/**
+ * POST /auth/verify-email
+ * Step onboarding:
+ * - richiede registrationToken (middleware)
+ * - verifica OTP email (hash+expires)
+ * - passa a TOTP_SETUP
+ */
+export async function verifyEmail(req, res) {
+  try {
+    const userId = req.registrationUserId;
+    const { code } = req.body;
+
+    if (!code) {
+      return res.status(400).json({ message: "Missing OTP code" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // guard step
+    if (user.onboardingStatus !== OnboardingStatus.EMAIL_VERIFICATION) {
+      return res.status(409).json({
+        message: "Invalid onboarding step",
+        expected: OnboardingStatus.EMAIL_VERIFICATION,
+        current: user.onboardingStatus,
+      });
+    }
+
+    const ok = verifyEmailOtp(user, code);
+    if (!ok) {
+      return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
+
+    // update onboarding
+    user.emailVerified = true;
+    user.onboardingStatus = OnboardingStatus.TOTP_SETUP;
+
+    // cleanup OTP
+    user.emailOtpHash = null;
+    user.emailOtpExpiresAt = null;
+
+    await user.save();
+
+    return res.json({
+      message: "Email verified. Proceed with TOTP setup.",
+      next: "POST /auth/totp/setup",
+    });
+  } catch (err) {
+    return res.status(500).json({
+      message: "Verify email error",
+      error: err.message,
+    });
+  }
+}
+
+
+/**
+ * POST /auth/totp/setup
+ * Step onboarding:
+ * - richiede registrationToken
+ * - genera secret totp e salva cifrato
+ * - genera QR code (dataUrl)
+ * - genera totpSetupToken breve da rimandare al verify
+ */
+export async function totpSetup(req, res) {
+  try {
+    const userId = req.registrationUserId;
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // guard: email verified + stato corretto
+    if (!user.emailVerified || user.onboardingStatus !== OnboardingStatus.TOTP_SETUP) {
+      return res.status(409).json({
+        message: "Invalid onboarding step",
+        expected: OnboardingStatus.TOTP_SETUP,
+        emailVerified: user.emailVerified,
+        current: user.onboardingStatus,
+      });
+    }
+
+    // genera secret
+    const secret = generateTotpSecret({ email: user.email, issuer: "PreFix" });
+
+    // salva secret cifrato
+    applyTotpSecretToUser(user, secret.base32);
+
+    // token breve per legare setup -> verify (anti-bypass step)
+    const { token: totpSetupToken, expiresAt } = createAndApplyTotpSetupToken(user);
+
+    await user.save();
+
+    // genera QR server side
+    const qrCodeDataUrl = await buildQrCodeDataUrl(secret.otpauth_url);
+
+    return res.json({
+      message: "TOTP secret generated. Scan QR and verify with your app.",
+      totpSetupToken,
+      totpSetupTokenExpiresAt: expiresAt.toISOString(),
+      qrCodeDataUrl,
+      // opzionale per debug/manual setup (in prod puoi rimuovere)
+      otpauthUrl: secret.otpauth_url,
+      next: "POST /auth/totp/verify",
+    });
+  } catch (err) {
+    return res.status(500).json({
+      message: "TOTP setup error",
+      error: err.message,
+    });
+  }
+}
+
+
+/**
+ * POST /auth/totp/verify
+ * Step onboarding:
+ * - richiede registrationToken
+ * - verifica totpSetupToken breve (hash+expiry)
+ * - verifica TOTP code
+ * - se ok: totpEnabled=true, onboarding DONE, status -> pending
+ */
+export async function totpVerify(req, res) {
+  try {
+    const userId = req.registrationUserId;
+    const { totpSetupToken, code } = req.body;
+
+    if (!totpSetupToken || !code) {
+      return res.status(400).json({
+        message: "Missing fields",
+        required: ["totpSetupToken", "code"],
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // guard step
+    if (!user.emailVerified || user.onboardingStatus !== OnboardingStatus.TOTP_SETUP) {
+      return res.status(409).json({
+        message: "Invalid onboarding step",
+        expected: OnboardingStatus.TOTP_SETUP,
+        current: user.onboardingStatus,
+      });
+    }
+
+    // verifica token breve setup->verify
+    const tokenOk = verifyTotpSetupToken(user, totpSetupToken);
+    if (!tokenOk) {
+      return res.status(400).json({ message: "Invalid or expired totpSetupToken" });
+    }
+
+    // verifica codice TOTP
+    const totpOk = verifyTotpCode(user, code);
+    if (!totpOk) {
+      return res.status(400).json({ message: "Invalid TOTP code" });
+    }
+
+    // finalizzo onboarding
+    user.totpEnabled = true;
+    user.onboardingStatus = OnboardingStatus.DONE;
+
+    // status business: ora attende admin
+    user.status = "pending";
+
+    // cleanup token breve
+    user.totpSetupTokenHash = null;
+    user.totpSetupTokenExpiresAt = null;
+
+    await user.save();
+
+    return res.json({
+      message: "TOTP verified. Registration completed. Awaiting admin approval.",
+      status: user.status,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      message: "TOTP verify error",
+      error: err.message,
+    });
+  }
+}
+
 
 
 /* ---------------------------------------------------
