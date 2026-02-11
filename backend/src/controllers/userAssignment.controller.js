@@ -1,5 +1,5 @@
 // controllers/userAssignment.controller.js
-import User from "../models/User.js";
+import { getTenantModels } from "../utils/tenantModels.js";
 
 /*
   Controller di ASSEGNAZIONE UTENTE
@@ -14,71 +14,64 @@ import User from "../models/User.js";
   Assegna un ruolo a un utente
   Usato da Admin Centrale
 */
-export const assignUserRole = async (req, res) => {
-  const { id } = req.params;
-  const { role } = req.body;
-
-  if (!role) {
-    return res.status(400).json({
-      message: "Campo 'role' mancante",
-    });
-  }
-
+export async function assignUserRole(req, res) {
   try {
-    const user = await User.findByIdAndUpdate(
-      id,
-      { role },
-      { new: true }
-    ).lean();
+    const { id } = req.params;
+    const { roleName } = req.body;
 
-    if (!user) {
-      return res.status(404).json({
-        message: "Utente non trovato",
-      });
-    }
+    if (!roleName) return res.status(400).json({ message: "roleName mancante" });
 
-    res.json(user);
+    const { User, Role } = getTenantModels(req);
+
+    const roleDoc = await Role.findOne({ roleName }).select("_id roleName").lean();
+    if (!roleDoc) return res.status(404).json({ message: `Ruolo '${roleName}' non trovato` });
+
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ message: "Utente non trovato" });
+
+    user.roles = [roleDoc._id];
+    await user.save();
+
+    return res.json({ message: "Ruolo assegnato", userId: user._id, roleName: roleDoc.roleName });
   } catch (err) {
-    res.status(500).json({
-      message: "Errore durante l'assegnazione del ruolo",
-      error: err.message,
-    });
+    return res.status(500).json({ message: "Errore assegnazione ruolo", error: err.message });
   }
-};
+}
+
 
 /*
   PUT /api/v1/users/:id/assign-building
   Assegna uno o più edifici a un utente
   Usato da Admin Centrale
 */
-export const assignUserBuilding = async (req, res) => {
-  const { id } = req.params;
-  const { buildingIds } = req.body;
-
-  if (!Array.isArray(buildingIds)) {
-    return res.status(400).json({
-      message: "buildingIds deve essere un array di ObjectId",
-    });
-  }
-
+export async function assignUserBuildings(req, res) {
   try {
+    const { id } = req.params;
+    const { buildingIds } = req.body;
+
+    if (!Array.isArray(buildingIds)) {
+      return res.status(400).json({ message: "buildingIds deve essere un array" });
+    }
+
+    const { User, Building } = getTenantModels(req);
+
+    const uniqueIds = [...new Set(buildingIds.map(String))];
+
+    const existing = await Building.find({ _id: { $in: uniqueIds } }).select("_id").lean();
+    if (existing.length !== uniqueIds.length) {
+      return res.status(400).json({ message: "Uno o più building non esistono" });
+    }
+
     const user = await User.findByIdAndUpdate(
       id,
-      { buildingIds },
+      { buildingIds: uniqueIds },
       { new: true }
     ).lean();
 
-    if (!user) {
-      return res.status(404).json({
-        message: "Utente non trovato",
-      });
-    }
+    if (!user) return res.status(404).json({ message: "Utente non trovato" });
 
-    res.json(user);
+    return res.json({ message: "Edifici assegnati", user });
   } catch (err) {
-    res.status(500).json({
-      message: "Errore durante l'assegnazione degli edifici",
-      error: err.message,
-    });
+    return res.status(500).json({ message: "Errore assegnazione edifici", error: err.message });
   }
-};
+}

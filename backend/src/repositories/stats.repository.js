@@ -1,6 +1,6 @@
 // src/repositories/stats.repository.js
 import mongoose from "mongoose";
-import { Intervention } from "../models/Intervention.js";
+import { getTenantModels } from "../utils/tenantModels.js";
 
 /**
  * Cast safe a ObjectId (ignora id falsi).
@@ -8,7 +8,7 @@ import { Intervention } from "../models/Intervention.js";
  * qui facciamo solo cast.
  */
 function toObjectIds(ids) {
-  return ids
+  return (ids || [])
     .map((id) => {
       try {
         return new mongoose.Types.ObjectId(id);
@@ -39,18 +39,11 @@ function buildMatch({ buildingIds, from, to }) {
  */
 function buildTimelineGroupId(period) {
   if (period === "month") {
-    return {
-      date: { $dateToString: { format: "%Y-%m-%d", date: "$performedAt" } },
-    };
+    return { date: { $dateToString: { format: "%Y-%m-%d", date: "$performedAt" } } };
   }
-
   if (period === "year") {
-    return {
-      date: { $dateToString: { format: "%Y-%m", date: "$performedAt" } },
-    };
+    return { date: { $dateToString: { format: "%Y-%m", date: "$performedAt" } } };
   }
-
-  // quarter -> settimana ISO
   return {
     isoYear: { $isoWeekYear: "$performedAt" },
     isoWeek: { $isoWeek: "$performedAt" },
@@ -62,12 +55,9 @@ function buildTimelineGroupId(period) {
  * - totals: conteggi globali (byType/bySeverity/total)
  * - timeline: bucketizzati in base al periodo
  */
-export async function getInterventionsStatsAggregation({
-  buildingIds,
-  period,
-  from,
-  to,
-}) {
+export async function getInterventionsStatsAggregation(req, { buildingIds, period, from, to }) {
+  const { Intervention } = getTenantModels(req);
+
   const matchStage = { $match: buildMatch({ buildingIds, from, to }) };
   const timelineGroupId = buildTimelineGroupId(period);
 
@@ -77,32 +67,17 @@ export async function getInterventionsStatsAggregation({
 
       total: { $sum: 1 },
 
-      // byType
-      maintenance: {
-        $sum: { $cond: [{ $eq: ["$type", "maintenance"] }, 1, 0] },
-      },
-      inspection: {
-        $sum: { $cond: [{ $eq: ["$type", "inspection"] }, 1, 0] },
-      },
-      failure: {
-        $sum: { $cond: [{ $eq: ["$type", "failure"] }, 1, 0] },
-      },
-      repair: {
-        $sum: { $cond: [{ $eq: ["$type", "repair"] }, 1, 0] },
-      },
+      maintenance: { $sum: { $cond: [{ $eq: ["$type", "maintenance"] }, 1, 0] } },
+      inspection: { $sum: { $cond: [{ $eq: ["$type", "inspection"] }, 1, 0] } },
+      failure: { $sum: { $cond: [{ $eq: ["$type", "failure"] }, 1, 0] } },
+      repair: { $sum: { $cond: [{ $eq: ["$type", "repair"] }, 1, 0] } },
 
-      // bySeverity
       low: { $sum: { $cond: [{ $eq: ["$severity", "low"] }, 1, 0] } },
       medium: { $sum: { $cond: [{ $eq: ["$severity", "medium"] }, 1, 0] } },
       high: { $sum: { $cond: [{ $eq: ["$severity", "high"] }, 1, 0] } },
     },
   };
 
-  /**
-   * Project timeline:
-   * - month/year: _id.date è già stringa
-   * - quarter: compongo "YYYY-Www"
-   */
   const timelineProjectStage =
     period === "quarter"
       ? {
@@ -128,11 +103,7 @@ export async function getInterventionsStatsAggregation({
               repair: "$repair",
               failure: "$failure",
             },
-            bySeverity: {
-              low: "$low",
-              medium: "$medium",
-              high: "$high",
-            },
+            bySeverity: { low: "$low", medium: "$medium", high: "$high" },
           },
         }
       : {
@@ -146,11 +117,7 @@ export async function getInterventionsStatsAggregation({
               repair: "$repair",
               failure: "$failure",
             },
-            bySeverity: {
-              low: "$low",
-              medium: "$medium",
-              high: "$high",
-            },
+            bySeverity: { low: "$low", medium: "$medium", high: "$high" },
           },
         };
 
@@ -161,12 +128,8 @@ export async function getInterventionsStatsAggregation({
       _id: null,
       total: { $sum: 1 },
 
-      maintenance: {
-        $sum: { $cond: [{ $eq: ["$type", "maintenance"] }, 1, 0] },
-      },
-      inspection: {
-        $sum: { $cond: [{ $eq: ["$type", "inspection"] }, 1, 0] },
-      },
+      maintenance: { $sum: { $cond: [{ $eq: ["$type", "maintenance"] }, 1, 0] } },
+      inspection: { $sum: { $cond: [{ $eq: ["$type", "inspection"] }, 1, 0] } },
       failure: { $sum: { $cond: [{ $eq: ["$type", "failure"] }, 1, 0] } },
       repair: { $sum: { $cond: [{ $eq: ["$type", "repair"] }, 1, 0] } },
 
@@ -180,28 +143,14 @@ export async function getInterventionsStatsAggregation({
     $project: {
       _id: 0,
       total: 1,
-      byType: {
-        maintenance: "$maintenance",
-        inspection: "$inspection",
-        repair: "$repair",
-        failure: "$failure",
-      },
-      bySeverity: {
-        low: "$low",
-        medium: "$medium",
-        high: "$high",
-      },
+      byType: { maintenance: "$maintenance", inspection: "$inspection", repair: "$repair", failure: "$failure" },
+      bySeverity: { low: "$low", medium: "$medium", high: "$high" },
     },
   };
 
   const pipeline = [
     matchStage,
-    {
-      $facet: {
-        timeline: [timelineGroupStage, timelineProjectStage, timelineSortStage],
-        totals: [totalsGroupStage, totalsProjectStage],
-      },
-    },
+    { $facet: { timeline: [timelineGroupStage, timelineProjectStage, timelineSortStage], totals: [totalsGroupStage, totalsProjectStage] } },
   ];
 
   const [result] = await Intervention.aggregate(pipeline);

@@ -1,16 +1,36 @@
-richiesta assegnazione ruolo
-richiesta assegnazione edificio
+req.user.role in NOTIFICATION
+
+dove metto i permessi di default per tutti?
+e quelli per admin?
+
+BASE --> USER
+
+creazione ruoli
+
+UPDATE REQUEST
 
 
-gestione richieste utenti
+Nel database registro i ruoli che ha l'admin?
 
 
-gestione interventi da parte dell'impresa
+RequirePermission e 
+ "GET /api/v1/users/pending": "users:pending:view",          // vedere pending
+  "GET /api/v1/users": "users:active:view",           // vedere active
+  "PATCH /api/v1/users/:id/approve": "users:pending:approve",       // attivare + assegnare ruolo (default user_base)
+  "PATCH /api/v1/users/:id/role": "users:role:update",           // cambiare ruolo a user attivo
+  "PATCH /api/v1/users/:id/status": "users:status:disable",        // disattivare user attivo
+
+  "GET /api/v1/users/buildings": "users:building:view",         // lista utenti e filtro missing building
+  "PATCH /api/v1/users/:id/buildings": "users:building:update", 
+  le lascio???
 
 
-calendario (logica + UI)
+  ROUTES
 
 
-dashboard locale
-dashboard centrale
-dashboard impresa
+
+le 2 logiche che voglio sono queste: La prima per settare status e/o ruolo, con 2 diverse modalità ( le persone con quel permesso, di solito solo l'admin, possono scegliere se selezionare solo gil utenti 1) o solo gli utenti 2) ): 1) user con status = pending: setta status ad active (obbligatoriamente se si accetta) e possibilità di selezione ruolo (user_base se non si è scelto niente), oppure non fare niente 2) user status = active o user status = disable: possibilità di cambiare ruolo diverso e/o gestire stato account utente, voglio permettere di disattivare l'account e riattivarlo nel caso in cui sia disattivato. Quindi se status = active posso disattivarlo, se status = disabled posso attivarlo, oppure non fare niente.
+  
+La seconda permette di settare i building associato ad un utente (anche qua solo le persone con qel permesso, di solito sol oadmin) 1) se l'utente si registra e c'è un solo building viene associato automaticamente a quel building 2) altrimenti l'admin può ottenere la lista di tutti gli utenti e filtrarla per quelli che non hanno associato nessun buildingId e possibilità di cambiare building, oppure non fare niente 
+
+Ti sottolineo che queste operazioni possono farle TUTTI coloro che hanno il permesso, non solo l'admin. Quindi è assolutamente importante che non mi crei altre routes o controllers solo per admin

@@ -1,3 +1,4 @@
+// models/Notification.js (schema)
 import mongoose from "mongoose";
 
 const NotificationSchema = new mongoose.Schema(
@@ -12,77 +13,53 @@ const NotificationSchema = new mongoose.Schema(
         "ATTIVAZIONE_UTENTE",
         "CREAZIONE_INTERVENTO",
         "CANCELLAZIONE_INTERVENTO",
-        "ERRORE_SERVIZIO"
-      ]
+        "ERRORE_SERVIZIO",
+      ],
     },
 
-    // NOTIFICA SPECIFICA PER UTENTE
+    // SOLO destinatario specifico (per-user)
     recipient: {
       userId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
-        required: false // Diventa opzionale
+        required: true,
+        index: true,
       },
-      role: {
-        type: String,
-        required: false, // Diventa opzionale
-        enum: ["admin_centrale", "admin_locale", "impresa", null]
-      }
     },
 
-    // ALTERNATIVA: NOTIFICA PER RUOLO + BUILDING
-    targetRole: {
-      type: String,
-      enum: ["admin_centrale", "admin_locale", "impresa", null],
-      default: null
-    },
-    
+    // opzionale: scope edificio (utile per UI filtri)
     targetBuildingId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Building",
-      default: null
+      default: null,
+      index: true,
     },
 
-    title: {
-      type: String,
-      required: true,
-      maxlength: 100
-    },
-
-    message: {
-      type: String,
-      required: true,
-      maxlength: 500
-    },
+    title: { type: String, required: true, maxlength: 100 },
+    message: { type: String, required: true, maxlength: 500 },
 
     priority: {
       type: String,
       enum: ["low", "medium", "high"],
-      default: "medium"
+      default: "medium",
+      index: true,
     },
 
-    readBy: [{
-      userId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User"
-      },
-      readAt: {
-        type: Date,
-        default: Date.now
-      }
-    }],
+    relatedEventId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Event",
+      default: null,
+      index: true,
+    },
 
-    read: {
-      type: Boolean,
-      default: false
-    }
+    read: { type: Boolean, default: false, index: true },
+    readAt: { type: Date, default: null }, // più semplice di readBy se è “solo per-user”
   },
-  {
-    timestamps: {
-      createdAt: "createdAt",
-      updatedAt: false
-    }
-  }
+  { timestamps: { createdAt: "createdAt", updatedAt: false } }
 );
 
-export default mongoose.model("Notification", NotificationSchema);
+// indici utili
+NotificationSchema.index({ "recipient.userId": 1, createdAt: -1 });
+NotificationSchema.index({ "recipient.userId": 1, read: 1, createdAt: -1 });
+
+export { NotificationSchema };

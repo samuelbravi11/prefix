@@ -1,6 +1,5 @@
-/*
 // controllers/calendar.controller.js
-import Event from "../models/Event.js";
+import { getTenantModels } from "../utils/tenantModels.js";
 
 /*
   Restituisce gli eventi calendarizzati
@@ -8,6 +7,8 @@ import Event from "../models/Event.js";
 */
 export const getCalendar = async (req, res) => {
   try {
+    const { Event } = getTenantModels(req);
+    
     const events = await Event.find({
       buildingId: { $in: req.user.buildingIds },
       scheduledAt: { $ne: null },
@@ -23,4 +24,3 @@ export const getCalendar = async (req, res) => {
     });
   }
 };
-*/

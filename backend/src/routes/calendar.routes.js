@@ -12,4 +12,3 @@ const router = express.Router();
 router.get("/", calendarController.getCalendar);
 
 export default router;
-*/

@@ -9,16 +9,9 @@
 export function parseCsvIds(value) {
   if (!value) return [];
 
-  // accettiamo anche accidentalmente array (es. ?buildingIds=a&buildingIds=b)
-  if (Array.isArray(value)) {
-    return value
-      .flatMap((v) => String(v).split(",")) // nel dubbio supporto anche "a,b" dentro array
-      .map((s) => s.trim())
-      .filter(Boolean);
-  }
+  const parts = Array.isArray(value)
+    ? value.flatMap((v) => String(v).split(","))
+    : String(value).split(",");
 
-  return String(value)
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  return [...new Set(parts.map((s) => s.trim()).filter(Boolean))];
 }

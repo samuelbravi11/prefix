@@ -1,42 +1,34 @@
-import User from "../models/User.js";
-import Role from "../models/Role.js";
 import { validateAssignableRole } from "../validators/userRole.validator.js";
+import { getTenantModels } from "../utils/tenantModels.js";
 
 export default async function assignUserRoleController(req, res) {
   try {
     const { role } = req.body;
     const { id } = req.params;
 
-    // Validazione di dominio (ruolo assegnabile)
     validateAssignableRole(role);
 
-    // Verifica esistenza utente
+    const { User, Role } = getTenantModels(req);
+
     const user = await User.findById(id);
     if (!user) {
       return res.status(404).json({ message: "Utente non trovato" });
     }
 
-    // Recupero ruolo dal DB (verifica che il ruolo da settare esista davvero)
     const roleDoc = await Role.findOne({ roleName: role });
     if (!roleDoc) {
-      return res.status(400).json({
-        message: `Ruolo '${role}' non esistente`
-      });
+      return res.status(400).json({ message: `Ruolo '${role}' non esistente` });
     }
 
-    // Assegna il ruolo (ObjectId)
-    user.roles = [roleDoc._id]; // SOLO ruolo principale
+    user.roles = [roleDoc._id];
     await user.save();
 
     return res.json({
       message: "Ruolo assegnato correttamente",
       userId: user._id,
-      role: roleDoc.roleName
+      role: roleDoc.roleName,
     });
-
   } catch (err) {
-    return res.status(400).json({
-      message: err.message
-    });
+    return res.status(400).json({ message: err.message });
   }
 }

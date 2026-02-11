@@ -1,85 +1,96 @@
-import Notification from "../models/Notification.js";
-import { resolveUserByRoleAndBuilding } from "../utils/notification.js";
+// src/services/notification.service.js
+import { findUserIdsByPermission } from "./notificationRecipients.service.js";
 
-/*  NOTIFICATION SERVICE PDP
-  Il notification service ha il compito di:
-  - riceve eventi di dominio (event.service.js, come la creazione di un evento di manutenzione);
-  - decide come e a chi notificare
-  - assegna automaticamente metadati di sistema (timestamp, stato di lettura);
-  - persiste le notifiche nel database;
-  - delega la consegna in tempo reale al Proxy Server, inviando un evento interno protetto tramite endpoint dedicato (internal/events). Solo il server interno può chiamare questa route grazie ad un token specifico (x-internal-proxy).
-
-  Il notification.service non conosce né gestisce le connessioni WebSocket, né l’identità dei client connessi.
-  La responsabilità della distribuzione delle notifiche in tempo reale è demandata al Proxy Server, che agisce come gateway applicativo e punto di accesso unico per i client.
- */
-export const notifyEvent = async ({ type, event }) => {
-  let notification = null;
-
+function permissionForNotification(type) {
   switch (type) {
     case "maintenance_created":
-      notification = await buildMaintenanceNotification(event);
-      break;
-
+      return "events:view";
     default:
-      // evento non notificabile
-      return;
+      return null;
   }
+}
 
-  if (!notification) return;
+export const notifyEvent = async (ctx, { type, event }) => {
+  const requiredPermission = permissionForNotification(type);
+  if (!requiredPermission) return;
 
-  // Persistenza DB (storico notifiche)
-  await Notification.create(notification);
+  const payload = buildNotificationPayload(type, event);
+  if (!payload) return;
 
-  // Invio realtime al Proxy (best effort)
+  const buildingId = event?.buildingId ? String(event.buildingId) : null;
+
+  // include opt-in check
+  const userIds = await findUserIdsByPermission(ctx, {
+    permissionName: requiredPermission,
+    buildingId,
+    onlyActive: true,
+    onlyOptIn: true,
+  });
+
+  if (!userIds.length) return;
+
+  const { Notification } = ctx.models;
+
+  const now = new Date();
+  const docs = userIds.map((uid) => ({
+    type: payload.type,
+    title: payload.title,
+    message: payload.message,
+    priority: payload.priority,
+
+    recipient: { userId: uid },
+    targetBuildingId: payload.targetBuildingId || null,
+    relatedEventId: payload.relatedEventId || null,
+
+    createdAt: now,
+    read: false,
+    readBy: [],
+  }));
+
+  await Notification.insertMany(docs);
+
   try {
     await fetch(`${process.env.PROXY_INTERNAL_URL}/internal/events`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-internal-proxy": "true",
+        "x-internal-secret": process.env.INTERNAL_PROXY_SECRET || "",
       },
-      body: JSON.stringify(notification),
+      body: JSON.stringify({
+        userIds,
+        event: {
+          type: payload.type,
+          title: payload.title,
+          message: payload.message,
+          priority: payload.priority,
+          relatedEventId: payload.relatedEventId || null,
+          buildingId: payload.targetBuildingId || null,
+          createdAt: now.toISOString(),
+        },
+      }),
     });
   } catch (err) {
     console.error("[notifyEvent] Proxy WS error:", err.message);
   }
 };
 
-
-// Costruisce la notifica di creazione intervento manutenzione
-async function buildMaintenanceNotification(event) {
-  /*
-    Destinatari:
-    - Admin locale dell’edificio
-  */
-  const targetUserId = await resolveUserByRoleAndBuilding({
-    roleName: "admin_locale",
-    buildingId: event.buildingId,
-  });
-
-  // Titolo e messaggio dipendono dal motivo dell’evento
-  const { title, message, priority } = resolveContentByReason(event);
-
-  return {
-    type: "CREAZIONE_INTERVENTO",
-
-    title,
-    message,
-    priority,
-
-    // targeting
-    recipient: targetUserId ? { userId: targetUserId } : null,
-    targetRole: targetUserId ? null : "admin_locale",
-    targetBuildingId: event.buildingId,
-
-    // collegamenti
-    relatedEventId: event._id,
-
-    // metadati di sistema
-    createdAt: new Date(),
-    read: false,
-    readBy: [],
-  };
+function buildNotificationPayload(type, event) {
+  switch (type) {
+    case "maintenance_created": {
+      const { title, message, priority } = resolveContentByReason(event);
+      return {
+        type: "CREAZIONE_INTERVENTO",
+        title,
+        message,
+        priority,
+        relatedEventId: event._id,
+        targetBuildingId: event.buildingId || null,
+      };
+    }
+    default:
+      return null;
+  }
 }
 
 function resolveContentByReason(event) {
@@ -90,14 +101,12 @@ function resolveContentByReason(event) {
         message: buildAIPredictiveMessage(event),
         priority: "high",
       };
-
     case "rule_based":
       return {
         title: "Manutenzione programmata",
         message: buildRuleBasedMessage(event),
         priority: "medium",
       };
-
     default:
       return {
         title: "Nuovo evento di manutenzione",

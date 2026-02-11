@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import qrcode from "qrcode";
-import { authenticator } from "otplib";
+import { authenticator } from "@otplib/preset-default";
 import { sha256, aesGcmEncrypt, aesGcmDecrypt } from "./crypto.service.js";
 
 /**

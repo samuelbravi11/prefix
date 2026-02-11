@@ -8,7 +8,7 @@ const openingSlotSchema = new mongoose.Schema(
   { _id: false }
 );
 
-const buildingSchema = new mongoose.Schema(
+const BuildingSchema = new mongoose.Schema(
   {
     name: {
       type: String,
@@ -41,4 +41,5 @@ const buildingSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export default mongoose.model("Building", buildingSchema);
+// export default mongoose.model("Building", BuildingSchema);
+export { BuildingSchema };

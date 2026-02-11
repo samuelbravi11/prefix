@@ -1,4 +1,4 @@
-import User from "../models/User.js";
+import { getTenantModels } from "../utils/tenantModels.js";
 // Middleware per il controllo dello stato dell'utente
 // - active: ok --> carico dati dell'utente
 // - other: not ok --> utente non attivo
@@ -12,6 +12,7 @@ export default async function requireActiveUser(req, res, next) {
     console.log("[requireActiveUser] req.user (prima):", req.user);
 
     // carico l’utente vero
+    const { User } = getTenantModels(req);
     const user = await User.findById(req.user._id).lean();
 
     console.log("[requireActiveUser] user dal DB:", user);
@@ -30,8 +31,8 @@ export default async function requireActiveUser(req, res, next) {
     // arricchisco req.user --> costruisco dati utente
     req.user = {
       _id: user._id,
-      roleIds: user.roles || [],
       status: user.status,
+      roleIds: user.roles || [],
       buildingIds: user.buildingIds || [],
     };
 

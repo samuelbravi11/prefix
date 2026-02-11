@@ -1,6 +1,6 @@
-import { Airesult } from "../models/Airesult.js";
+// src/repositories/airesult.repository.js
 
-// Inserisce un record AIResult (append-only)
-export const createAIResult = async (data) => {
-  return Airesult.create(data);
+export const createAIResult = async (ctx, data) => {
+  const { AIResult } = ctx.models;
+  return AIResult.create(data);
 };

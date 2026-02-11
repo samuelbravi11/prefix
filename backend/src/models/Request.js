@@ -56,4 +56,5 @@ const RequestSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export default mongoose.model("Request", RequestSchema);
+// export default mongoose.model("Request", RequestSchema);
+export { RequestSchema };

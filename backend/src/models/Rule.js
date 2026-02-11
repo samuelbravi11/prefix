@@ -70,4 +70,5 @@ const RuleSchema = new mongoose.Schema({
   timestamps: true, // createdAt / updatedAt
 });
 
-export const Rule = mongoose.model("Rule", RuleSchema);
+export { RuleSchema };
+// export const Rule = mongoose.model("Rule", RuleSchema);

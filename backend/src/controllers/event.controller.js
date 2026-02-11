@@ -1,10 +1,4 @@
-import Event from "../models/Event.js";
-import {
-  parseRequestedBuildingIds,
-  resolveAllowedBuildingIds,
-  findEvents,
-  aggregateEventStats,
-} from "../repositories/event.repository.js";
+import { getTenantModels } from "../utils/tenantModels.js";
 import { getDateRange } from "../services/dateRanges.service.js";
 
 /*
@@ -18,6 +12,7 @@ import { getDateRange } from "../services/dateRanges.service.js";
 export const getEvents = async (req, res) => {
   try {
     console.log("\n=== GET EVENTS (FINAL) ===");
+    const { Event } = getTenantModels(req);
 
     const { buildingIds, view } = req.query;
     const now = new Date();

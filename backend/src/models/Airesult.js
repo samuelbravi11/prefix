@@ -97,4 +97,5 @@ const AiresultSchema = new mongoose.Schema(
 AiresultSchema.index({ assetId: 1, kind: 1, evaluatedAt: -1 });
 AiresultSchema.index({ kind: 1, evaluatedAt: -1 });
 
-export const Airesult = mongoose.model("Airesult", AiresultSchema);
+// export const Airesult = mongoose.model("Airesult", AiresultSchema);
+export { AiresultSchema };

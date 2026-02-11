@@ -1,69 +1,108 @@
 import bcrypt from "bcrypt";
-import User from "../models/User.js";
-import crypto from "crypto";
+import { sha256 } from "./crypto.service.js";
 import { verifyRefreshToken } from "./token.service.js";
 
-// helper per hash token
+/**
+ * Hash refresh token con pepper (sicurezza extra)
+ */
 function hashToken(token) {
-  return crypto.createHash("sha256").update(token).digest("hex");
+  const pepper = process.env.REFRESH_TOKEN_PEPPER || "";
+  return sha256(String(token) + pepper);
 }
 
-async function verifyLogin(email, password) {
-  const user = await User.findOne({ email });
+function normalizeEmail(email) {
+  return String(email || "").toLowerCase().trim();
+}
 
+/**
+ * Trova utente per email (tenant-aware).
+ * @param {mongoose.Model} UserModel
+ * @param {string} email
+ */
+export async function findByEmail(UserModel, email) {
+  return UserModel.findOne({ email: normalizeEmail(email) });
+}
+
+/**
+ * Verifica login (tenant-aware).
+ * @param {mongoose.Model} UserModel
+ * @param {string} email
+ * @param {string} password
+ */
+export async function verifyLogin(UserModel, email, password) {
+  const normalizedEmail = normalizeEmail(email);
+
+  const user = await UserModel.findOne({ email: normalizedEmail });
   if (!user) return null;
 
   const valid = await bcrypt.compare(password, user.auth.passwordHash);
   return valid ? user : null;
 }
 
-async function findByEmail(email) {
-  return User.findOne({ email });
-}
+/**
+ * Aggiunge refresh token (tenant-aware) legato al device.
+ * Salva SOLO hash sha256 del token.
+ *
+ * @param {mongoose.Model} UserModel
+ * @param {string|ObjectId} userId
+ * @param {string} refreshToken
+ * @param {string} fingerprintHash
+ */
+export async function addRefreshToken(UserModel, userId, refreshToken, fingerprintHash) {
+  const tokenHash = hashToken(refreshToken);
 
-async function addRefreshToken(userId, refreshToken, fingerprintHash) {
-  const hashed = bcrypt.hashSync(refreshToken, 10);
-
-  return User.findByIdAndUpdate(
+  return UserModel.findByIdAndUpdate(
     userId,
     {
       $push: {
         "auth.refreshTokens": {
-          tokenHash: hashed,
+          tokenHash,
           fingerprintHash,
-          createdAt: new Date()
-        }
-      }
-    }
+          createdAt: new Date(),
+          // updatedAt: new Date(), // <-- SOLO se aggiungi updatedAt nello schema
+        },
+      },
+    },
+    { new: true }
   );
 }
 
-export async function rotateRefreshToken(userId, oldToken, newToken, fingerprintHash) {
+/**
+ * Ruota refresh token (tenant-aware):
+ * - verifica firma del vecchio refresh token
+ * - controlla che appartenga a userId
+ * - sostituisce oldHash con newHash SOLO se fingerprint coincide
+ *
+ * @param {mongoose.Model} UserModel
+ * @param {string|ObjectId} userId
+ * @param {string} oldToken
+ * @param {string} newToken
+ * @param {string} fingerprintHash
+ */
+export async function rotateRefreshToken(UserModel, userId, oldToken, newToken, fingerprintHash) {
   try {
-    // Verifica che il vecchio token sia valido
-    const oldPayload = await verifyRefreshToken(oldToken); // <-- USA VERIFYREFRESHTOKEN
-    
+    const oldPayload = await verifyRefreshToken(oldToken);
     if (!oldPayload || oldPayload.userId !== userId.toString()) {
       return false;
     }
 
-    // Calcola hash
-    const oldHash = crypto.createHash("sha256").update(oldToken).digest("hex");
-    const newHash = crypto.createHash("sha256").update(newToken).digest("hex");
+    const oldHash = hashToken(oldToken);
+    const newHash = hashToken(newToken);
 
-    // Aggiorna nel database
-    const result = await User.updateOne(
+    const update = {
+      $set: {
+        "auth.refreshTokens.$.tokenHash": newHash,
+        // "auth.refreshTokens.$.updatedAt": new Date(), // <-- SOLO se aggiungi updatedAt nello schema
+      },
+    };
+
+    const result = await UserModel.updateOne(
       {
         _id: userId,
         "auth.refreshTokens.tokenHash": oldHash,
         "auth.refreshTokens.fingerprintHash": fingerprintHash,
       },
-      {
-        $set: { 
-          "auth.refreshTokens.$.tokenHash": newHash,
-          "auth.refreshTokens.$.updatedAt": new Date()
-        },
-      }
+      update
     );
 
     return result.modifiedCount > 0;
@@ -73,10 +112,44 @@ export async function rotateRefreshToken(userId, oldToken, newToken, fingerprint
   }
 }
 
+/**
+ * Revoca un refresh token specifico (logout singolo device)
+ * @param {mongoose.Model} UserModel
+ * @param {string} refreshToken
+ * @param {string} fingerprintHash
+ */
+export async function revokeRefreshTokenForDevice(UserModel, refreshToken, fingerprintHash) {
+  const tokenHash = hashToken(refreshToken);
+
+  const result = await UserModel.updateOne(
+    { "auth.refreshTokens.tokenHash": tokenHash },
+    { $pull: { "auth.refreshTokens": { tokenHash, fingerprintHash } } }
+  );
+
+  return result.modifiedCount > 0;
+}
+
+/**
+ * Revoca un refresh token ovunque (fallback, meno “preciso”)
+ * @param {mongoose.Model} UserModel
+ * @param {string} refreshToken
+ */
+export async function revokeRefreshToken(UserModel, refreshToken) {
+  const tokenHash = hashToken(refreshToken);
+
+  const result = await UserModel.updateOne(
+    { "auth.refreshTokens.tokenHash": tokenHash },
+    { $pull: { "auth.refreshTokens": { tokenHash } } }
+  );
+
+  return result.modifiedCount > 0;
+}
+
 export default {
-  //createUser,
-  verifyLogin,
   findByEmail,
+  verifyLogin,
   addRefreshToken,
-  rotateRefreshToken
+  rotateRefreshToken,
+  revokeRefreshTokenForDevice,
+  revokeRefreshToken,
 };

@@ -5,13 +5,6 @@ import { normalizePath } from "../utils/normalizePath.js";
 // MIDDLEWARE DI PEP
 export default async function rbacGuard(req, res, next) {
   try {
-    console.log("[RBAC GUARD]", {
-      method: req.method,
-      baseUrl: req.baseUrl,
-      path: req.path,
-      normalized: normalizePath(req.baseUrl + req.path),
-    });
-
     // Estrai informazioni dalla richiesta
     const method = req.method;
     const normalizedPath = normalizePath(req.baseUrl + req.path);
@@ -24,10 +17,14 @@ export default async function rbacGuard(req, res, next) {
       return res.status(403).json({
         message: "Permission not mapped",
         route: `${method} ${normalizedPath}`,
-        hint: "Aggiungi questa route in PERMISSION_MAP oppure correggi normalizePath"
+        hint: "Aggiungi questa route in PERMISSION_MAP oppure correggi normalizePath",
       });
     }
 
+    const originalHost =
+      req.headers["x-forwarded-host"] ||
+      req.headers["x-original-host"] ||
+      req.headers.host;
 
     // qua il proxy deve chiedere al PDP se l'utente ha il permesso richiesto
     // per questo chiamo la route interna del PDP che ho esposto appositamente per il proxy
@@ -36,12 +33,18 @@ export default async function rbacGuard(req, res, next) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-internal-proxy": "true" 
+
+        // sigillo proxy -> internal server
+        "x-internal-proxy": "true",
+        "x-internal-secret": process.env.INTERNAL_PROXY_SECRET || "",
+
+        // tenant routing
+        "x-forwarded-host": originalHost,
       },
       body: JSON.stringify({
-        userId: req.user._id,
-        permission: requiredPermission
-      })
+        userId: req.user?._id,
+        permission: requiredPermission,
+      }),
     });
 
     // Salvo la risposta del PDP
@@ -52,17 +55,16 @@ export default async function rbacGuard(req, res, next) {
       return res.status(403).json({
         message: "Permesso mancante",
         requiredPermission,
-        route: `${req.method} ${normalizedPath}`,
-        detail: decision.reason || "Permission denied by PDP"
+        route: `${method} ${normalizedPath}`,
+        detail: decision.reason || "Permission denied by PDP",
       });
     }
 
-
     // Tutto ok --> il proxy inoltra finalmente la richiesta originale al server interno tramite il reverse proxy (internalProxy).
     // La richiesta originale (quella mandata dal client) prosegue il suo flusso normale verso il server interno.
-    next();
+    return next();
   } catch (err) {
     console.error("RBAC Guard error:", err);
-    res.status(500).json({ message: "RBAC error" });
+    return res.status(500).json({ message: "RBAC error" });
   }
 }

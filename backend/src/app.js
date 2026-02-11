@@ -11,12 +11,15 @@ import notificationRoutes from "./routes/notification.routes.js";
 import buildingRoutes from "./routes/building.routes.js"
 import eventRoutes from "./routes/event.routes.js";
 import interventionRoutes from "./routes/intervention.routes.js";
-//import calendarRoutes from "./routes/calendar.routes.js";
+import tenantProvisionRoutes from "./routes/tenantProvision.routes.js"
+// import calendarRoutes from "./routes/calendar.routes.js";
 
 import requestLogger from "./middleware/apiLogger.middleware.js";
 import rbacDecisionController from "./controllers/rbacDecision.controller.js";
 import requireActiveUser from "./middleware/requireActiveUser.middleware.js";
+import requireInternalProxyAndInjectUserId from "./middleware/requireInternalProxyAndInjectUserId.middleware.js";
 
+import tenantContext from "./middleware/tenantContext.middleware.js";
 
 const app = express();
 
@@ -39,26 +42,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// BLOCCO ACCESSI DIRETTI
-app.use((req, res, next) => {
-  // Consenti root e health
-  if (req.path === "/" || req.path === "/health") {
-    return next();
-  }
-
-  // Header di fiducia
-  if (req.headers["x-internal-proxy"] !== "true") {
-    return res.status(403).json({ error: "Direct access forbidden" });
-  }
-
-  // Il proxy passa solo l'id utente
-  const userId = req.headers["x-user-id"];
-  if (userId) {
-    req.user = { _id: userId };
-  }
-
-  next();
-});
 
 // BODY PARSER E COOKIE
 app.use(express.json());
@@ -66,6 +49,12 @@ app.use(cookieParser());
 
 // LOGGER
 app.use(requestLogger);
+
+// RICERCA TENANT PER SUBDOMAIN
+app.use(tenantContext);
+
+// BLOCCO ACCESSI DIRETTI + inject userId
+app.use(requireInternalProxyAndInjectUserId);
 
 
 
@@ -84,6 +73,9 @@ app.use("/auth", authRoutes);
 */
 app.post("/rbac/decide", rbacDecisionController);
 
+app.use("/api/v1/platform", tenantProvisionRoutes);
+
+
 // HEALTH / ROOT per verifica funzionamento
 app.get("/", (req, res) => {
   res.send("Server interno PDP/API attivo");
@@ -95,10 +87,11 @@ app.get("/health", (req, res) => {
 
 
 
+
 /* ------------- requireActiveUser -------------
   tutto quello che segue richiede utente attivo
 --------------------------------------------- */
-app.use(requireActiveUser);
+app.use("/api/v1", requireActiveUser);
 
 app.use((req, res, next) => {
   if (!req.user || !req.user.status || !req.user.buildingIds) {

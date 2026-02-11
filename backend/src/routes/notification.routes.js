@@ -8,6 +8,12 @@ import {
 const router = express.Router();
 
 /*
+  GET /api/v1/notifications
+  Recupera tutte le notifiche dell’utente loggato
+*/
+router.get("/", getUserNotifications);
+
+/*
   PATCH /api/v1/notifications/:id/read
   Segna una notifica come letta
 */
@@ -18,12 +24,6 @@ router.patch("/:id/read", markNotificationAsRead);
   Segna tutte le notifiche come lette
 */
 router.patch("/read-all", markAllAsRead);
-
-/*
-  GET /api/v1/notifications
-  Recupera tutte le notifiche dell’utente loggato
-*/
-router.get("/", getUserNotifications);
 
 
 export default router;

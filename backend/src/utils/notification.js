@@ -1,31 +1,20 @@
-import User from "../models/User.js";
-import Role from "../models/Role.js";
-
-/**
-  Risolve il destinatario di una notifica dato ruolo e edificio.
-  - Esclude SEMPRE admin_centrale
-  - Se non trova utenti validi → ritorna null
-  @param {Object} params
-  @param {string} params.role - ruolo target (es. "admin_locale")
-  @param {ObjectId} params.buildingId
-  @returns {ObjectId|null}
- */
-export const resolveUserByRoleAndBuilding = async ({ roleName, buildingId }) => {
+// src/utils/notification.js
+export async function resolveUserByRoleAndBuilding(ctx, { roleName, buildingId }) {
   if (!roleName || !buildingId) return null;
 
-  // recupero il ruolo
-  const role = await Role.findOne({ roleName }).select("_id");
-  if (!role) {
-    console.warn("[resolveUser] role not found:", roleName);
-    return null;
-  }
+  const { Role, User } = ctx.models;
 
-  // cerco un utente con quel ruolo e edificio
+  const role = await Role.findOne({ roleName }).select("_id").lean();
+  if (!role) return null;
+
   const user = await User.findOne({
     roles: role._id,
     buildingIds: buildingId,
-    status: "active"
-  }).select("_id roles buildingIds");
+    status: "active",
+    wantsNotifications: true,
+  })
+    .select("_id")
+    .lean();
 
-  return user ? user._id : null;
-};
+  return user ? String(user._id) : null;
+}

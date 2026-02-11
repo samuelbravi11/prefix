@@ -59,7 +59,4 @@ const InterventionSchema = new mongoose.Schema(
   }
 );
 
-export const Intervention = mongoose.model(
-  "Intervention",
-  InterventionSchema
-);
+export { InterventionSchema };

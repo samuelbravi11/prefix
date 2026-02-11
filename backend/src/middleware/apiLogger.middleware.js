@@ -29,7 +29,7 @@ export default async function requestLogger(req, res, next) {
       durationMs,
 
       user: {
-        id: req.user?.userId || null, 
+        id: req.user?._id || null,
         role: req.user?.role || null
       },
 

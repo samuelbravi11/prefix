@@ -1,5 +1,4 @@
-import Event from "../models/Event.js";
-import Asset from "../models/Asset.js";
+// src/services/event.service.js
 import { notifyEvent } from "./notification.service.js";
 
 /* EVENT SERVICE PDP
@@ -12,20 +11,14 @@ import { notifyEvent } from "./notification.service.js";
   - persiste l'evento nel database;
   - genera notifiche interne tramite il Notification Service per informare gli utenti interessati della creazione o modifica dell'evento.
 */
-export const createMaintenanceEvent = async ({
-  assetId,
-  reason,
-  scheduledAt = null,
-  aiResultId,
-  data = {},
-}) => {
-  // recupero asset per buildingId
-  const asset = await Asset.findById(assetId).lean();
-  if (!asset) {
-    throw new Error("Asset not found while creating event");
-  }
+export const createMaintenanceEvent = async (
+  ctx,
+  { assetId, reason, scheduledAt = null, aiResultId, data = {} }
+) => {
+  const { Event, Asset } = ctx.models;
 
-  console.log("[EVENT SERVICE] scheduledAt ricevuto:", scheduledAt);
+  const asset = await Asset.findById(assetId).lean();
+  if (!asset) throw new Error("Asset not found while creating event");
 
   const event = await Event.create({
     assetId: asset._id,
@@ -36,11 +29,7 @@ export const createMaintenanceEvent = async ({
     data,
   });
 
-  await notifyEvent({
-    type: "maintenance_created",
-    event,
-  });
+  await notifyEvent(ctx, { type: "maintenance_created", event });
 
   return event;
 };
-

@@ -23,7 +23,8 @@ const AuditLogSchema = new mongoose.Schema({
   byUser: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
-    required: true,
+    required: false,
+    default: null,
     index: true
   },
 
@@ -42,4 +43,5 @@ const AuditLogSchema = new mongoose.Schema({
   versionKey: false
 });
 
-export default mongoose.model("AuditLog", AuditLogSchema);
+// export default mongoose.model("AuditLog", AuditLogSchema);
+export { AuditLogSchema };

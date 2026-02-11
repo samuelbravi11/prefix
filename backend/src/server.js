@@ -1,11 +1,11 @@
 import dotenv from "dotenv";
-import connectDB from "./config/db.js";
-import { startScheduler } from './scheduler/scheduler.js'
+import { initMongo } from "./config/dbManager.js";
+import { startScheduler } from "./scheduler/scheduler.js";
+import app from "./app.js";
 
 // Carica variabili ambiente --> salvate in memoria ram per tutta l'esecuzione del server
 dotenv.config({ path: new URL("../.env", import.meta.url).pathname });
-
-import app from "./app.js";
+console.log("MONGODB_URI:", process.env.MONGODB_URI);
 
 // Avvio server PDP
 // questo server è isolato e si occupa solo di gestire le decisioni di autorizzazione e l'accesso al database per il controllo dei permessi.
@@ -13,15 +13,13 @@ import app from "./app.js";
 async function startServer() {
   try {
     // Connessione Mongo
-    const connection = await connectDB();
-    // connection.connection.name --> non va
+    await initMongo();
 
     // Avvio server SOLO dopo DB
     const PORT = 4000;
 
     app.listen(PORT, "127.0.0.1", () => {
       console.log(`Server interno attivo su 127.0.0.1:${PORT}`);
-      console.log(`DB in uso: ${process.env.DB_NAME}`);
       // Avvio lo scheduler solo una volta --> vive dentro il server interno decisionale
       startScheduler();
     });

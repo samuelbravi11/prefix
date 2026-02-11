@@ -1,9 +1,11 @@
-import { schedulerConfig } from '../config/scheduler.config.js'
-import { getAllActiveAssets, updateRuleCheck, updateAICheck } from '../repositories/asset.repository.js'
-import { getRulesByAsset } from '../repositories/rule.repository.js'
-import { ruleCheckJob } from '../jobs/ruleCheck.job.js'
-import { aiPredictiveCheckJob } from '../jobs/aiPredictive.job.js'
-import { shouldRunPredictiveCheck, shouldRunRuleCheck } from "../scheduler/scheduler.utils.js"
+// src/scheduler/scheduler.js
+import { schedulerConfig } from "../config/scheduler.config.js";
+import { listActiveTenants, buildCtxFromTenant } from "../utils/tenantModels.js";
+
+import { getAllActiveAssets, updateRuleCheck, updateAICheck } from "../repositories/asset.repository.js";
+import { ruleCheckJob } from "../jobs/ruleCheck.job.js";
+import { aiPredictiveCheckJob } from "../jobs/aiPredictive.job.js";
+import { shouldRunPredictiveCheck, shouldRunRuleCheck } from "./scheduler.utils.js";
 
 /* Lo Scheduler
   E' il componente software che decide quando e come eseguire i Job.
@@ -23,60 +25,42 @@ import { shouldRunPredictiveCheck, shouldRunRuleCheck } from "../scheduler/sched
   In questo modo definisco una gerarchia dove il controllo regolistico è il preferito e viene chiamato più spesso,
   Le chiamate AI predittive verranno fatte se il controllo regolistico non ha avuto successo e se la soglia ha superato il threshold molto più alto del threshold regolistico
 */
-export const startScheduler = () => {
-  console.log('[SCHEDULER] Started')
+async function tickTenant(ctx) {
+  const assets = await getAllActiveAssets(ctx);
+  const now = Date.now();
 
-  // avvia una chiamata asincrona su setInterval ogni tot minuti (definito su .env)
-  setInterval(async () => {
-    console.log('[SCHEDULER] Tick')
+  for (const asset of assets) {
+    const shouldCheckRules = shouldRunRuleCheck(asset, now, schedulerConfig.ruleThreshold);
 
-    // trova tutti gli asset con stato attivo
-    const assets = await getAllActiveAssets()
-    //console.log("Assets trovati:\n", assets)
-    // now fondamentale per sapere il momento in cui il sistema ha deciso di valutare questo bene
-    const now = Date.now()
+    if (shouldCheckRules) {
+      const ruleResult = await ruleCheckJob(ctx, asset, now);
+      await updateRuleCheck(ctx, asset._id, new Date(now));
+      if (ruleResult.triggered) continue;
+    }
 
-    // prelevo ogni bene sul database
-    for (const asset of assets) {
-      console.log("\n\n\n-----------------------------------\n\n\n")
-      console.log("ASSET:\n", asset)
-      // controllo se l'ultima chiamata regolistica ha superato una soglia di threshold
-      const shouldCheckRules = shouldRunRuleCheck(asset, now, schedulerConfig.ruleThreshold)
-      console.log("shouldCheckRules: ", shouldCheckRules)
-
-      // se ho sforato --> chiamata al Job rule
-      if (shouldCheckRules) {
-        const ruleResult = await ruleCheckJob(asset, now)
-
-        // aggiorno lastRuleCheck
-        await updateRuleCheck(asset.id, now)
-
-        // regola soddisfatta → evento creato --> STOP
-        if (ruleResult.triggered) {
-          console.log("Evento creato da AI regolistica")
-          continue
-        }
-      }
-
-      console.log("Controllo regolistico non superato")
-      console.log("Procedo con controllo predittivo")
-      // se il controllo regolistico non è stato superato --> chiamata AI predittiva
-      const shouldCheckAI = shouldRunPredictiveCheck(asset, now, schedulerConfig.aiThreshold)
-      console.log("shouldCheckAI: ", shouldCheckAI)
-      
-      // se supero threshold --> chiamata al Job AI-Predictive
-      if (shouldCheckAI) {
-        const aiResult = await aiPredictiveCheckJob(asset, now)
-
-        // aggiorno lastAICheck
-        await updateAICheck(asset.id, now)
-
-        // decisione finale sempre qui
-        if (aiResult.triggered) {
-          console.log("Evento creato da AI predittiva")
-          // evento creato dentro job o service
-        }
+    const shouldCheckAI = shouldRunPredictiveCheck(asset, now, schedulerConfig.aiThreshold);
+    if (shouldCheckAI) {
+      const aiResult = await aiPredictiveCheckJob(ctx, asset, now);
+      await updateAICheck(ctx, asset._id, new Date(now));
+      if (aiResult.triggered) {
+        // evento creato nel job
       }
     }
-  }, schedulerConfig.interval)
+  }
 }
+
+export const startScheduler = () => {
+  console.log("[SCHEDULER] Started");
+
+  setInterval(async () => {
+    try {
+      const tenants = await listActiveTenants();
+      for (const t of tenants) {
+        const ctx = await buildCtxFromTenant(t);
+        await tickTenant(ctx);
+      }
+    } catch (err) {
+      console.error("[SCHEDULER] Error:", err);
+    }
+  }, schedulerConfig.interval);
+};

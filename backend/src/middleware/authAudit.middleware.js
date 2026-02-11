@@ -21,7 +21,7 @@ export default function authAudit(eventType) {
 
         // Identità (se disponibile)
         email: req.body?.email || null,
-        userId: req.user?.id || null,
+        userId: req.user?._id || null,
 
         // Esito (default: successo, override nel controller se serve)
         success: true,

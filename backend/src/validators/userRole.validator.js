@@ -1,3 +1,4 @@
+/*
 import {
   ASSIGNABLE_ROLES,
   FORBIDDEN_ASSIGNMENT_ROLES
@@ -20,3 +21,4 @@ export function validateAssignableRole(role) {
     throw new Error(`Ruolo '${role}' non valido`);
   }
 }
+*/

@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-const assetSchema = new mongoose.Schema({
+const AssetSchema = new mongoose.Schema({
   // IDENTITÀ
   name: {
     type: String,
@@ -72,4 +72,5 @@ const assetSchema = new mongoose.Schema({
   timestamps: true, // createdAt / updatedAt
 });
 
-export default mongoose.model("Asset", assetSchema);
+// export default mongoose.model("Asset", AssetSchema);
+export { AssetSchema };

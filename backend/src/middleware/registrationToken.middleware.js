@@ -1,3 +1,4 @@
+// src/middlewares/requireRegistrationToken.js
 import { verifyRegistrationToken } from "../services/registrationToken.service.js";
 
 /**
@@ -7,16 +8,16 @@ import { verifyRegistrationToken } from "../services/registrationToken.service.j
  */
 export function requireRegistrationToken(req, res, next) {
   try {
-    const authHeader = req.headers.authorization || "";
+    const authHeader = req.headers.authorization || req.headers.Authorization || "";
 
     if (!authHeader.startsWith("Bearer ")) {
       return res.status(401).json({ message: "Missing registration token" });
     }
 
-    const token = authHeader.split(" ")[1];
+    const token = authHeader.slice("Bearer ".length).trim();
     const payload = verifyRegistrationToken(token);
 
-    req.registrationUserId = payload.userId;
+    req.registrationUserId = String(payload.userId);
     return next();
   } catch (err) {
     return res.status(401).json({

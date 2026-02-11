@@ -2,6 +2,8 @@ import { Router } from "express";
 import authAudit from "../middleware/authAudit.middleware.js";
 import * as authController from "../controllers/auth.controller.js";
 import { requireRegistrationToken } from "../middleware/registrationToken.middleware.js";
+import { bootstrapStart } from "../controllers/bootstrap.controller.js";
+
 
 const router = Router();
 
@@ -46,6 +48,10 @@ router.post("/totp/setup", requireRegistrationToken, authController.totpSetup);
 router.post("/totp/verify", requireRegistrationToken, authController.totpVerify);
 
 
+
+
+// Crea nel tenant DB utente admin_centrale con onboarding iniziale come nel tuo register
+router.post("/bootstrap/start", authAudit("BOOTSTRAP_START"), bootstrapStart);
 
 
 

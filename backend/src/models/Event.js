@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-const eventSchema = new mongoose.Schema(
+const EventSchema = new mongoose.Schema(
   {
     assetId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -60,7 +60,8 @@ const eventSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-eventSchema.index({ assetId: 1, status: 1 });
-eventSchema.index({ buildingId: 1, scheduledAt: 1 });
+EventSchema.index({ assetId: 1, status: 1 });
+EventSchema.index({ buildingId: 1, scheduledAt: 1 });
 
-export default mongoose.model("Event", eventSchema);
+// export default mongoose.model("Event", eventSchema);
+export { EventSchema };

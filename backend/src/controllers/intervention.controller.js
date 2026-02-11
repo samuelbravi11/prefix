@@ -1,5 +1,5 @@
 // src/controllers/intervention.controller.js
-import { Intervention } from "../models/Intervention.js";
+import { getTenantModels } from "../utils/tenantModels.js";
 import { getInterventionsQuery } from "../repositories/intervention.repository.js";
 import { parseCsvIds } from "../utils/queryParsing.js";
 
@@ -63,6 +63,7 @@ export async function getInterventions(req, res) {
  */
 export async function getInterventionById(req, res) {
   try {
+    const { Intervention } = getTenantModels(req);
     const intervention = await Intervention.findOne({
       _id: req.params.id,
       buildingId: { $in: req.user.buildingIds },

@@ -59,15 +59,31 @@ setupSwagger(proxyApp);
   - emette l'evento WS verso i client connessi in base a userId/role/buildingId (rooms)
 */
 proxyApp.post("/internal/events", (req, res) => {
-  // solo il server interno può chiamare questa route, usando un particolare flag (x-internal-proxy)
   if (req.headers["x-internal-proxy"] !== "true") {
-    console.log("FORBIDDEN")
     return res.status(403).json({ message: "Forbidden" });
   }
-  // Emissione evento WS
-  emitEvent(req.body);
 
-  res.status(204).end();
+  const required = process.env.INTERNAL_PROXY_SECRET;
+  if (required) {
+    const got = req.headers["x-internal-secret"];
+    if (!got || String(got) !== String(required)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+  }
+
+  // payload atteso:
+  // { userIds: string[], event: {...} }
+  const { userIds, event } = req.body || {};
+  if (!Array.isArray(userIds) || !event) {
+    return res.status(400).json({ message: "Invalid payload", expected: { userIds: [], event: {} } });
+  }
+
+  // fan-out verso room user:<id>
+  for (const uid of userIds) {
+    emitEvent({ userId: uid, ...event });
+  }
+
+  return res.status(204).end();
 });
 
 
@@ -78,6 +94,11 @@ proxyApp.post("/internal/events", (req, res) => {
 const manualProxy = (req, res) => {
   console.log(`[MANUAL PROXY] Inoltrando richiesta: ${req.method} ${req.originalUrl}`);
 
+  const originalHost =
+    req.headers["x-forwarded-host"] ||
+    req.headers["x-original-host"] ||
+    req.headers.host;
+
   const options = {
     hostname: '127.0.0.1',
     port: 4000,
@@ -87,8 +108,13 @@ const manualProxy = (req, res) => {
       ...req.headers,
       // sigillo di fiducia
       'x-internal-proxy': 'true',
+      // chiave
+      "x-internal-secret": process.env.INTERNAL_PROXY_SECRET || "",
       // proxy passa solo id user --> sarà il server interno connesso al DB a ricostruirsi l'utente e verificare se è attivo
-      'x-user-id': req.user._id.toString(),
+      'x-user-id': req.user?._id?.toString?.() || '',
+      // host originale da cui arriva la risposta --> per subdomain multi-tenant
+      'x-forwarded-host': originalHost,
+      'x-forwarded-proto': req.headers['x-forwarded-proto'] || 'http',
       host: '127.0.0.1:4000',
       connection: 'close',
     }
@@ -155,6 +181,11 @@ proxyApp.use("/auth", (req, res) => {
   
   const fullPath = req.baseUrl + (req.path === '/' ? '' : req.path);
   
+  const originalHost =
+    req.headers["x-forwarded-host"] ||
+    req.headers["x-original-host"] ||
+    req.headers.host;
+
   const options = {
     hostname: '127.0.0.1',
     port: 4000,
@@ -163,6 +194,8 @@ proxyApp.use("/auth", (req, res) => {
     headers: {
       ...req.headers,
       'x-internal-proxy': 'true',
+      "x-internal-secret": process.env.INTERNAL_PROXY_SECRET || "",
+      'x-forwarded-host': originalHost,
       'host': '127.0.0.1:4000'
     }
   };
@@ -200,6 +233,11 @@ proxyApp.use("/rbac", (req, res) => {
   
   const fullPath = req.baseUrl + (req.path === '/' ? '' : req.path);
   
+  const originalHost =
+    req.headers["x-forwarded-host"] ||
+    req.headers["x-original-host"] ||
+    req.headers.host;
+
   const options = {
     hostname: '127.0.0.1',
     port: 4000,
@@ -208,6 +246,8 @@ proxyApp.use("/rbac", (req, res) => {
     headers: {
       ...req.headers,
       'x-internal-proxy': 'true',
+      "x-internal-secret": process.env.INTERNAL_PROXY_SECRET || "",
+      'x-forwarded-host': originalHost,
       'host': '127.0.0.1:4000'
     }
   };
@@ -266,6 +306,8 @@ proxyApp.use("/api/v1/interventions", requireAuth, rbacGuard, manualProxy);
 // API per calendar
 proxyApp.use("/api/v1/calendar", requireAuth, rbacGuard, manualProxy);
 
+// API per tenant
+proxyApp.use("/api/v1/platform", requireAuth, rbacGuard, manualProxy);
 
 
 // Route di test

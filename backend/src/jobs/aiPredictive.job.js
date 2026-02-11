@@ -7,12 +7,12 @@ import { createAIResult } from "../repositories/airesult.repository.js";
 /* AI PREDICTIVE JOB
   L'unità di lavoro specifica che deve essere eseguita al fine di effettuare una chiamata AI predittiva
 */
-export const aiPredictiveCheckJob = async (asset, now) => {
+export const aiPredictiveCheckJob = async (ctx, asset, now) => {
   // recupero storico interventi
-  const interventions = await getInterventionsQuery({
+  const interventions = await getInterventionsQuery(ctx, {
     buildingIds: [asset.buildingId],
     assetId: asset._id,
-    period: null, // NESSUN filtro temporale → storico completo
+    period: null,
   });
   console.log("STORICO INTERVENTI:\n", interventions);
 
@@ -28,7 +28,7 @@ export const aiPredictiveCheckJob = async (asset, now) => {
   // payload per Python
   const payload = {
     asset_id: asset._id.toString(),
-    history: history,
+    history,
     metadata: asset.metadata || {},
     now: new Date(now).toISOString(),
   };
@@ -39,7 +39,7 @@ export const aiPredictiveCheckJob = async (asset, now) => {
   console.log("RISPOSTA AI PREDITTIVA:\n", response);
 
   // push AIResult per le predizioni (sono un mago)
-  const aiResult = await createAIResult({
+  const aiResult = await createAIResult(ctx, {
     assetId: asset._id,
     buildingId: asset.buildingId,
     kind: "predictive_check",
@@ -62,17 +62,11 @@ export const aiPredictiveCheckJob = async (asset, now) => {
 
   // se il rischio supera una certa soglia --> creo evento
   if (response.shouldCreateEvent) {
-    await createMaintenanceEvent({
+    await createMaintenanceEvent(ctx, {
       assetId: asset._id,
-      buildingId: asset.buildingId,
       reason: "ai_predictive",
       aiResultId: aiResult._id,
-
-      // data suggerita direttamente dall’AI (manualmente)
-      scheduledAt: response.suggestedDate
-        ? new Date(response.suggestedDate)
-        : null,
-
+      scheduledAt: response.suggestedDate ? new Date(response.suggestedDate) : null,
       data: {
         riskScore: response.riskScore,
         riskLevel: response.riskLevel,
@@ -80,7 +74,6 @@ export const aiPredictiveCheckJob = async (asset, now) => {
         suggestedDate: response.suggestedDate,
       },
     });
-
 
     return { triggered: true };
   }

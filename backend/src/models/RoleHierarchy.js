@@ -1,3 +1,4 @@
+/*
 import mongoose from "mongoose";
 
 const RoleHierarchySchema = new mongoose.Schema({
@@ -20,5 +21,6 @@ RoleHierarchySchema.index(
   { unique: true }
 );
 
-const RoleHierarchy = mongoose.model("RoleHierarchy", RoleHierarchySchema);
-export default RoleHierarchy;
+// const RoleHierarchy = mongoose.model("RoleHierarchy", RoleHierarchySchema);
+export { RoleHierarchySchema };
+*/
