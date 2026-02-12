@@ -25,6 +25,14 @@ export default async function tenantContext(req, res, next) {
     const host = normalizeHost(req.headers["x-forwarded-host"] || req.headers.host);
     const slug = extractTenantSlug(host, baseDomain);
 
+
+    // 🔧 FALLBACK PER SVILUPPO
+    if (!slug && process.env.NODE_ENV !== 'production') {
+      slug = process.env.DEFAULT_DEV_TENANT_SLUG || 'demo';
+      console.warn(`[DEV] No tenant subdomain, using default slug: ${slug}`);
+    }
+
+
     // se vuoi anche "app.com" senza subdomain (landing), gestiscilo qui:
     if (!slug) {
       req.tenant = null;

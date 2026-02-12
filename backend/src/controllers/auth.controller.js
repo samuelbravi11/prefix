@@ -208,13 +208,14 @@ export async function totpSetup(req, res) {
 
     const qrCodeDataUrl = await buildQrCodeDataUrl(secret.otpauth_url);
 
+    const isProd = process.env.NODE_ENV === "production";
+
     return res.json({
       message: "TOTP secret generated. Scan QR and verify with your app.",
       totpSetupToken,
       totpSetupTokenExpiresAt: expiresAt.toISOString(),
       qrCodeDataUrl,
-      // opzionale per debug/manual setup (in prod rimuovere)
-      otpauthUrl: secret.otpauth_url,
+      ...(isProd ? {} : { otpauthUrl: secret.otpauth_url }), // solo in sviluppo
       next: "POST /auth/totp/verify",
     });
   } catch (err) {
@@ -324,6 +325,11 @@ export async function login(req, res) {
       });
     }
 
+    // validazione lunghezza fingerprint
+    if (fingerprintHash.length > 128) {
+      return res.status(400).json({ message: "fingerprintHash troppo lungo" });
+    }
+
     const { User } = await getTenantModels(req);
     const normalizedEmail = String(email).toLowerCase().trim();
 
@@ -370,6 +376,10 @@ export async function refresh(req, res) {
 
     if (!refreshToken) return res.status(401).json({ message: "Refresh token mancante" });
     if (!fingerprintHash) return res.status(400).json({ message: "Missing fingerprintHash" });
+
+    if (fingerprintHash.length > 128) {
+      return res.status(400).json({ message: "fingerprintHash troppo lungo" });
+    }
 
     let payload;
     try {
@@ -459,6 +469,12 @@ export async function logout(req, res) {
     if (!refreshToken) return res.status(200).json({ message: "Already logged out" });
 
     const { fingerprintHash } = req.body; // <-- chiedilo al client
+
+    // validazione
+    if (fingerprintHash && fingerprintHash.length > 128) {
+      return res.status(400).json({ message: "fingerprintHash troppo lungo" });
+    }
+    
     const { User } = await getTenantModels(req);
 
     if (fingerprintHash) {

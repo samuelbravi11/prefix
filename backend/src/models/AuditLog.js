@@ -43,5 +43,8 @@ const AuditLogSchema = new mongoose.Schema({
   versionKey: false
 });
 
+// TTL index: elimina automaticamente i documenti dopo 30 giorni
+AuditLogSchema.index({ timestamp: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 30 }); // 30 giorni
+
 // export default mongoose.model("AuditLog", AuditLogSchema);
 export { AuditLogSchema };

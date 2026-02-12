@@ -1,3 +1,5 @@
+// src/services/python.service.js
+
 /* ADAPTER: Node <--> Python
   Gestisce le chiamate HTTP verso il server Python
 */
@@ -46,9 +48,20 @@ async function safeFetchJson(url, payload, timeoutMs = 15000) {
     });
 
     const text = await res.text();
-    if (!res.ok) throw new Error(`Python ${res.status}: ${text.slice(0, 300)}`);
+    if (!res.ok) {
+      throw new Error(`Python ${res.status}: ${text.slice(0, 300)}`);
+    }
+
+    // Verifica che il contenuto sia JSON
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      throw new Error(`Python service returned non-JSON (${contentType})`);
+    }
 
     return text ? JSON.parse(text) : {};
+  } catch (err) {
+    // Rilancia con messaggio più chiaro
+    throw new Error(`Python service call failed: ${err.message}`);
   } finally {
     clear();
   }

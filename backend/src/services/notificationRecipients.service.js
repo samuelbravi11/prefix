@@ -1,53 +1,49 @@
 // src/services/notificationRecipients.service.js
+import mongoose from "mongoose";
 
 /**
  * Trova tutti gli userId che hanno un certo permesso.
- * Opzionale:
- * - buildingId: limita a utenti che hanno quel buildingId in user.buildingIds
- * - onlyActive: limita a user.status === "active"
- * - onlyOptIn: limita a user.wantsNotifications === true
+ * Utilizza aggregazione con $lookup per efficienza.
  */
 export async function findUserIdsByPermission(
   ctx,
   { permissionName, buildingId = null, onlyActive = true, onlyOptIn = true }
 ) {
-  const { User, Role } = ctx.models;
+  const { User } = ctx.models;
 
-  const userFilter = {};
-  if (onlyActive) userFilter.status = "active";
-  if (buildingId) userFilter.buildingIds = buildingId;
+  const matchStage = {};
 
-  // opt-in notifications
-  if (onlyOptIn) userFilter.wantsNotifications = true;
+  if (onlyActive) matchStage.status = "active";
+  if (buildingId) matchStage.buildingIds = buildingId;
+  if (onlyOptIn) matchStage.wantsNotifications = true;
 
-  const users = await User.find(userFilter).select("_id roles").lean();
-  if (!users.length) return [];
-
-  const roleIds = [
-    ...new Set(
-      users.flatMap((u) => (Array.isArray(u.roles) ? u.roles.map(String) : []))
-    ),
+  const pipeline = [
+    { $match: matchStage },
+    { $project: { _id: 1, roles: 1 } },
+    { $unwind: { path: "$roles", preserveNullAndEmptyArrays: false } },
+    {
+      $lookup: {
+        from: "roles",
+        localField: "roles",
+        foreignField: "_id",
+        as: "role",
+      },
+    },
+    { $unwind: { path: "$role", preserveNullAndEmptyArrays: false } },
+    {
+      $lookup: {
+        from: "permissions",
+        localField: "role.permission",
+        foreignField: "_id",
+        as: "permissions",
+      },
+    },
+    { $unwind: { path: "$permissions", preserveNullAndEmptyArrays: false } },
+    { $match: { "permissions.name": permissionName } },
+    { $group: { _id: "$_id" } },
+    { $project: { userId: { $toString: "$_id" } } },
   ];
-  if (!roleIds.length) return [];
 
-  const roles = await Role.find({ _id: { $in: roleIds } })
-    .populate("permission", "name")
-    .lean();
-
-  const rolePerms = new Map();
-  for (const r of roles) {
-    const perms = Array.isArray(r.permission)
-      ? r.permission.map((p) => p?.name).filter(Boolean)
-      : [];
-    rolePerms.set(String(r._id), new Set(perms));
-  }
-
-  const allowed = [];
-  for (const u of users) {
-    const uRoleIds = Array.isArray(u.roles) ? u.roles.map(String) : [];
-    const has = uRoleIds.some((rid) => rolePerms.get(rid)?.has(permissionName));
-    if (has) allowed.push(String(u._id));
-  }
-
-  return allowed;
+  const results = await User.aggregate(pipeline);
+  return results.map((r) => r.userId);
 }

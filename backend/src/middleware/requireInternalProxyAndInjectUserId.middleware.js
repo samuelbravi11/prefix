@@ -9,13 +9,7 @@
  * - NON verifica JWT qui (lo fa il proxy).
  * - Il server interno riceve solo un “sigillo di fiducia” + userId.
  */
-export default function requireInternalProxyAndInjectUserId(req, res, next) {
-  
-  // Consenti root e health senza sigillo (opzionale, per debug/monitoring)
-  if (req.path === "/" || req.path === "/health") {
-    return next();
-  }
-  
+export default function requireInternalProxyAndInjectUserId(req, res, next) { 
   // Header di fiducia: se manca -> accesso diretto vietato
   const required = process.env.INTERNAL_PROXY_SECRET;
   if (req.headers["x-internal-proxy"] !== "true") {

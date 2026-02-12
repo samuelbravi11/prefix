@@ -19,7 +19,6 @@ export const notifyEvent = async (ctx, { type, event }) => {
 
   const buildingId = event?.buildingId ? String(event.buildingId) : null;
 
-  // include opt-in check
   const userIds = await findUserIdsByPermission(ctx, {
     permissionName: requiredPermission,
     buildingId,
@@ -37,11 +36,9 @@ export const notifyEvent = async (ctx, { type, event }) => {
     title: payload.title,
     message: payload.message,
     priority: payload.priority,
-
     recipient: { userId: uid },
     targetBuildingId: payload.targetBuildingId || null,
     relatedEventId: payload.relatedEventId || null,
-
     createdAt: now,
     read: false,
     readBy: [],
@@ -49,7 +46,11 @@ export const notifyEvent = async (ctx, { type, event }) => {
 
   await Notification.insertMany(docs);
 
+  // Chiamata al proxy con timeout
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 secondi
+
     await fetch(`${process.env.PROXY_INTERNAL_URL}/internal/events`, {
       method: "POST",
       headers: {
@@ -57,21 +58,14 @@ export const notifyEvent = async (ctx, { type, event }) => {
         "x-internal-proxy": "true",
         "x-internal-secret": process.env.INTERNAL_PROXY_SECRET || "",
       },
-      body: JSON.stringify({
-        userIds,
-        event: {
-          type: payload.type,
-          title: payload.title,
-          message: payload.message,
-          priority: payload.priority,
-          relatedEventId: payload.relatedEventId || null,
-          buildingId: payload.targetBuildingId || null,
-          createdAt: now.toISOString(),
-        },
-      }),
+      body: JSON.stringify({ userIds, event: payload }),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
   } catch (err) {
-    console.error("[notifyEvent] Proxy WS error:", err.message);
+    // fallback silenzioso: la notifica è già salvata nel DB
+    console.error("[notifyEvent] Proxy WS error (timeout or network):", err.message);
   }
 };
 

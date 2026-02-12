@@ -274,6 +274,38 @@ proxyApp.use("/rbac", (req, res) => {
 });
 
 
+// =====================================================
+// CREAZIONE TENANT (solo chiave seed, NO JWT, NO manualProxy)
+// =====================================================
+proxyApp.post("/api/v1/platform/tenants", async (req, res) => {
+  const internalUrl = `${process.env.INTERNAL_API_URL || 'http://localhost:4000'}${req.originalUrl}`;
+
+  console.log(`[TENANT PROXY] → ${internalUrl}`);
+
+  try {
+    const response = await fetch(internalUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-proxy': 'true',
+        'x-internal-secret': process.env.INTERNAL_PROXY_SECRET || '',
+      },
+      body: JSON.stringify(req.body),
+    });
+
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (err) {
+    console.error('[TENANT PROXY] Errore:', err.message);
+    res.status(500).json({
+      message: 'Errore di comunicazione con il server interno',
+      error: err.message,
+    });
+  }
+});
+
+
+
 
 /* =====================================================
   API PROTETTE – /api/v1/** --> GUARDA IN FONDO
@@ -306,8 +338,6 @@ proxyApp.use("/api/v1/interventions", requireAuth, rbacGuard, manualProxy);
 // API per calendar
 proxyApp.use("/api/v1/calendar", requireAuth, rbacGuard, manualProxy);
 
-// API per tenant
-proxyApp.use("/api/v1/platform", requireAuth, rbacGuard, manualProxy);
 
 
 // Route di test

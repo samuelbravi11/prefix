@@ -87,7 +87,6 @@ export const approvePendingUser = async (req, res) => {
     const user = await User.findById(id);
     if (!user) return res.status(404).json({ message: "Utente non trovato" });
 
-    // Modalità 1: SOLO pending -> active obbligatorio
     if (user.status !== "pending") {
       return res.status(409).json({
         message: "Operazione consentita solo su utenti in stato 'pending'",
@@ -95,14 +94,18 @@ export const approvePendingUser = async (req, res) => {
       });
     }
 
-    const finalRoleName = (roleName && String(roleName).trim()) || "user_base";
+    let finalRoleName = (roleName && String(roleName).trim()) || "user_base";
 
     const role = await Role.findOne({ roleName: finalRoleName }).lean();
-    if (!role) return res.status(400).json({ message: `Ruolo '${finalRoleName}' non esistente` });
+    if (!role) {
+      // fallback: cerca un ruolo di default (es. user_base) – se manca, errore chiaro
+      return res.status(500).json({
+        message: `Ruolo '${finalRoleName}' non trovato. Controllare che il seed sia stato eseguito.`,
+      });
+    }
 
     user.status = "active";
     user.roles = [role._id];
-
     await user.save();
 
     return res.json({

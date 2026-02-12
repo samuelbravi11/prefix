@@ -2,6 +2,8 @@
 import { PERMISSION_MAP } from "../config/permissions.map.js";
 import { normalizePath } from "../utils/normalizePath.js";
 
+const INTERNAL_API_URL = process.env.INTERNAL_API_URL || "http://localhost:4000";
+
 // MIDDLEWARE DI PEP
 export default async function rbacGuard(req, res, next) {
   try {
@@ -29,16 +31,12 @@ export default async function rbacGuard(req, res, next) {
     // qua il proxy deve chiedere al PDP se l'utente ha il permesso richiesto
     // per questo chiamo la route interna del PDP che ho esposto appositamente per il proxy
     // il suo compito è solo quello di fare da tramite tra il proxy e il PDP vero e proprio (rbacDecisionController)
-    const response = await fetch("http://localhost:4000/rbac/decide", {
+    const response = await fetch(`${INTERNAL_API_URL}/rbac/decide`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-
-        // sigillo proxy -> internal server
         "x-internal-proxy": "true",
         "x-internal-secret": process.env.INTERNAL_PROXY_SECRET || "",
-
-        // tenant routing
         "x-forwarded-host": originalHost,
       },
       body: JSON.stringify({

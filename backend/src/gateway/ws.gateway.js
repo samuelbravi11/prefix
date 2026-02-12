@@ -47,8 +47,8 @@ export function initWebSocket(server) {
     if (!token) return next(new Error("Unauthorized: missing token"));
 
     try {
-      const payload = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
-      socket.user = payload; // deve contenere userId
+      const payload = jwt.verify(token, process.env.JWT_SECRET);
+      socket.user = payload; // deve contenere userId, ruolo, buildings?
       next();
     } catch {
       return next(new Error("Unauthorized: invalid token"));
@@ -62,12 +62,16 @@ export function initWebSocket(server) {
   // viene chiamato ogni volta che un browser si connette (vedi file frontend/src/services/socket.service.js)
   // ti dà un oggetto socket che rappresenta quel client
   io.on("connection", (socket) => {
-    socket.on("join", ({ userId }) => {
-      // NON fidarti del client
+    // L'utente si iscrive alle stanze che gli competono
+    socket.on("join", ({ userId, role, buildingIds }) => {
       if (!userId) return;
       if (String(socket.user.userId || socket.user.id) !== String(userId)) return;
 
       socket.join(`user:${userId}`);
+      if (role) socket.join(`role:${role}`);
+      if (Array.isArray(buildingIds)) {
+        buildingIds.forEach((bid) => socket.join(`building:${bid}`));
+      }
     });
   });
 }
@@ -75,10 +79,27 @@ export function initWebSocket(server) {
 /* ============================
   EMISSIONE EVENTI
 ============================ */
-// Funzione per emettere eventi verso client specifici
-// Senza gateway non potresti emettere eventi WS dal backend --> ogni servizio rischia di creare una nuova istanza di Socket.IO, aprendo nuove connessioni WS ad ogni richiesta HTTP
-// Con il gateway hai un'unica istanza di Socket.IO che mantiene le connessioni WS aperte
-export function emitEvent(event) {
+/**
+ * Emette un evento a uno o più destinatari.
+ * Supporta:
+ * - userId: singolo utente
+ * - userIds: array di utenti
+ * - role: tutti gli utenti con quel ruolo (stanza role:<role>)
+ * - buildingId: tutti gli utenti associati a quell'edificio (stanza building:<buildingId>)
+ */
+export function emitEvent({ userId, userIds, role, buildingId, ...event }) {
   if (!io) return;
-  if (event.userId) io.to(`user:${event.userId}`).emit("notification", event);
+
+  if (userId) {
+    io.to(`user:${userId}`).emit("notification", event);
+  }
+  if (userIds && Array.isArray(userIds)) {
+    userIds.forEach((uid) => io.to(`user:${uid}`).emit("notification", event));
+  }
+  if (role) {
+    io.to(`role:${role}`).emit("notification", event);
+  }
+  if (buildingId) {
+    io.to(`building:${buildingId}`).emit("notification", event);
+  }
 }

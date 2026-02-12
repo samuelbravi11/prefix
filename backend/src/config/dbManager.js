@@ -2,11 +2,11 @@
 import mongoose from "mongoose";
 
 let baseConn = null;
-const tenantConnCache = new Map(); // dbName -> Connection
+const tenantConnCache = new Map();
 
 /**
- * Inizializza la connessione base al cluster.
- * Usa la URI del cluster (mongodb+srv://... o mongodb://... replica set).
+ * Connessione fisica unica al cluster.
+ * IMPORTANT: MONGODB_URI deve includere SRV o standard URI e (opzionale) parametri.
  */
 export async function initMongo() {
   if (baseConn?.readyState === 1) return baseConn;
@@ -14,7 +14,6 @@ export async function initMongo() {
   const uri = process.env.MONGODB_URI;
   if (!uri) throw new Error("Missing MONGODB_URI");
 
-  // createConnection ritorna una Connection; asPromise() aspetta l'open
   baseConn = await mongoose
     .createConnection(uri, {
       maxPoolSize: 20,
@@ -27,33 +26,25 @@ export async function initMongo() {
 }
 
 /**
- * DB fisso per dati platform/central registry.
+ * DB fisso per registry tenant.
+ * Scegli UNO e usalo ovunque (qui: "platform")
  */
 export function platformDb() {
-  if (!baseConn || baseConn.readyState !== 1) {
-    throw new Error("Mongo not initialized. Call initMongo() first.");
-  }
-
+  if (!baseConn) throw new Error("Mongo not initialized");
   return baseConn.useDb("platform", { useCache: true });
 }
 
 /**
- * DB tenant (1 DB per azienda).
+ * DB per tenant (1 DB per azienda) via useDb su baseConn.
+ * Non crea nuove connessioni fisiche.
  */
 export function tenantDb(dbName) {
-  if (!baseConn || baseConn.readyState !== 1) {
-    throw new Error("Mongo not initialized. Call initMongo() first.");
-  }
+  if (!baseConn) throw new Error("Mongo not initialized");
   if (!dbName) throw new Error("Missing tenant dbName");
 
-  const key = String(dbName);
+  if (tenantConnCache.has(dbName)) return tenantConnCache.get(dbName);
 
-  // cache lato app (extra) + useCache lato mongoose
-  const cached = tenantConnCache.get(key);
-  if (cached?.readyState === 1) return cached;
-
-  const conn = baseConn.useDb(key, { useCache: true });
-  tenantConnCache.set(key, conn);
-
+  const conn = baseConn.useDb(dbName, { useCache: true });
+  tenantConnCache.set(dbName, conn);
   return conn;
 }
