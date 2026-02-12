@@ -19,19 +19,17 @@ function extractTenantSlug(host, baseDomain) {
 
 export default async function tenantContext(req, res, next) {
   try {
-    const baseDomain = process.env.BASE_DOMAIN; // es "app.com"
+    const baseDomain = process.env.BASE_DOMAIN;
     if (!baseDomain) throw new Error("Missing BASE_DOMAIN env");
 
     const host = normalizeHost(req.headers["x-forwarded-host"] || req.headers.host);
-    const slug = extractTenantSlug(host, baseDomain);
-
+    let slug = extractTenantSlug(host, baseDomain); // ✅ usiamo let
 
     // 🔧 FALLBACK PER SVILUPPO
     if (!slug && process.env.NODE_ENV !== 'production') {
       slug = process.env.DEFAULT_DEV_TENANT_SLUG || 'demo';
       console.warn(`[DEV] No tenant subdomain, using default slug: ${slug}`);
     }
-
 
     // se vuoi anche "app.com" senza subdomain (landing), gestiscilo qui:
     if (!slug) {
@@ -53,6 +51,11 @@ export default async function tenantContext(req, res, next) {
 
     return next();
   } catch (err) {
-    return res.status(500).json({ message: "Tenant context error", error: err.message });
+    console.error(err.stack);
+    return res.status(500).json({
+      message: "Tenant context error",
+      error: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
   }
 }

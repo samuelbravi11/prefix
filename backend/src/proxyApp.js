@@ -115,6 +115,7 @@ const manualProxy = (req, res) => {
       // host originale da cui arriva la risposta --> per subdomain multi-tenant
       'x-forwarded-host': originalHost,
       'x-forwarded-proto': req.headers['x-forwarded-proto'] || 'http',
+      'x-platform-seed-key': req.headers['x-platform-seed-key'],
       host: '127.0.0.1:4000',
       connection: 'close',
     }
@@ -281,6 +282,7 @@ proxyApp.post("/api/v1/platform/tenants", async (req, res) => {
   const internalUrl = `${process.env.INTERNAL_API_URL || 'http://localhost:4000'}${req.originalUrl}`;
 
   console.log(`[TENANT PROXY] → ${internalUrl}`);
+  console.log('[TENANT PROXY] x-platform-seed-key header ricevuto dal client:', req.headers['x-platform-seed-key']);
 
   try {
     const response = await fetch(internalUrl, {
@@ -289,6 +291,7 @@ proxyApp.post("/api/v1/platform/tenants", async (req, res) => {
         'Content-Type': 'application/json',
         'x-internal-proxy': 'true',
         'x-internal-secret': process.env.INTERNAL_PROXY_SECRET || '',
+        'x-platform-seed-key': req.headers['x-platform-seed-key'],
       },
       body: JSON.stringify(req.body),
     });

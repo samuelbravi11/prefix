@@ -50,12 +50,6 @@ app.use(cookieParser());
 // LOGGER
 app.use(requestLogger);
 
-// RICERCA TENANT PER SUBDOMAIN
-app.use(tenantContext);
-
-// BLOCCO ACCESSI DIRETTI + inject userId
-app.use(requireInternalProxyAndInjectUserId);
-
 
 
 /* ----------------------------------------------------------------------
@@ -76,6 +70,17 @@ app.post("/rbac/decide", rbacDecisionController);
 app.use("/api/v1/platform", tenantProvisionRoutes);
 
 
+// ====================================================
+// TENANT CONTEXT – solo da qui in poi serve tenant
+// ====================================================
+app.use(tenantContext);
+
+// ====================================================
+// PROXY SIGNATURE – blocca accessi diretti
+// ====================================================
+app.use(requireInternalProxyAndInjectUserId);
+
+
 // HEALTH / ROOT per verifica funzionamento
 app.get("/", (req, res) => {
   res.send("Server interno PDP/API attivo");
@@ -84,7 +89,6 @@ app.get("/", (req, res) => {
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "sono vivo" });
 });
-
 
 
 

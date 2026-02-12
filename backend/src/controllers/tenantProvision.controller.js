@@ -10,6 +10,9 @@ function randomToken() {
 
 export async function createTenantAndInvite(req, res) {
   try {
+    console.log('[DEBUG] PLATFORM_SEED_KEY env:', process.env.PLATFORM_SEED_KEY);
+    console.log('[DEBUG] x-platform-seed-key header:', req.headers['x-platform-seed-key']);
+
     const seedKey = req.headers["x-platform-seed-key"];
     if (!seedKey || seedKey !== process.env.PLATFORM_SEED_KEY) {
       return res.status(403).json({ message: "Forbidden" });
