@@ -37,11 +37,41 @@
           </router-link>
         </li>
         <li class="nav-item">
-          <router-link to="/Buildings-List" class="nav-link sidebar-link" active-class="active-link"
+          <router-link to="/buildings-list" class="nav-link sidebar-link" active-class="active-link"
             exact-active-class="active-link" @click="setPageTitle('Edifici affidati')">
             <div class="d-flex align-items-center">
               <i class="pi pi-building icon-azure me-3 flex-shrink-0"></i>
               <span class="sidebar-text">Seleziona Edifici</span>
+            </div>
+          </router-link>
+        </li>
+
+        <li class="nav-item">
+          <router-link
+            to="/gestione-utenti"
+            class="nav-link sidebar-link"
+            active-class="active-link"
+            exact-active-class="active-link"
+            @click="setPageTitle('Gestione utenti')"
+          >
+            <div class="d-flex align-items-center">
+              <i class="bi bi-people icon-azure me-3 flex-shrink-0"></i>
+              <span class="sidebar-text">Gestione utenti</span>
+            </div>
+          </router-link>
+        </li>
+
+        <li class="nav-item">
+          <router-link
+            to="/assegna-edifici"
+            class="nav-link sidebar-link"
+            active-class="active-link"
+            exact-active-class="active-link"
+            @click="setPageTitle('Assegna edifici')"
+          >
+            <div class="d-flex align-items-center">
+              <i class="bi bi-building icon-azure me-3 flex-shrink-0"></i>
+              <span class="sidebar-text">Assegna edifici</span>
             </div>
           </router-link>
         </li>
@@ -268,8 +298,10 @@ const activeLink = ref('')
 const routeTitles = {
   '/dashboard': 'Dashboard',
   '/calendar': 'Calendario Interventi',
-  '/Buildings-List': 'Edifici affidati',
-  '/visualizzazione-tabellare': 'Visualizzazione Tabellare'
+  '/buildings-list': 'Edifici affidati',
+  '/visualizzazione-tabellare': 'Visualizzazione Tabellare',
+  '/gestione-utenti': 'Gestione utenti',
+  '/assegna-edifici': 'Assegna edifici',
 }
 
 // Funzione per aggiornare il titolo

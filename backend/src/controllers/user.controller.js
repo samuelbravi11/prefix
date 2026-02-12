@@ -170,56 +170,79 @@ export const updateUserRole = async (req, res) => {
 export const updateUserStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body || {};
+    const rawStatus = req.body?.status;     // opzionale
+    const rawRoleName = req.body?.roleName; // opzionale
 
-    if (!status || !["active", "disabled"].includes(status)) {
+    const status = rawStatus ? String(rawStatus).trim().toLowerCase() : undefined;
+    const roleName = rawRoleName ? String(rawRoleName).trim() : undefined;
+
+    if (!status && !roleName) {
+      return res.status(400).json({
+        message: "Devi fornire almeno uno tra 'status' o 'roleName'",
+      });
+    }
+
+    if (status && !["active", "disabled"].includes(status)) {
       return res.status(400).json({
         message: "status non valido",
         allowed: ["active", "disabled"],
       });
     }
 
-    const { User } = getTenantModels(req);
+    const { User, Role } = getTenantModels(req);
 
     const user = await User.findById(id);
     if (!user) return res.status(404).json({ message: "Utente non trovato" });
 
-    // Qui evitiamo di toccare i pending con questa route
     if (user.status === "pending") {
       return res.status(409).json({
-        message: "Non puoi cambiare status di un utente 'pending' con questa route. Usa /approve.",
+        message: "Utente 'pending': usa /approve per attivarlo e (opzionalmente) assegnare il ruolo.",
         currentStatus: user.status,
       });
     }
 
-    // Regole che hai chiesto:
-    // - active -> disabled consentito
-    // - disabled -> active consentito
-    // - qualsiasi altro caso -> blocco
-    const allowedTransition =
-      (user.status === "active" && status === "disabled") ||
-      (user.status === "disabled" && status === "active");
+    const updates = {};
 
-    if (!allowedTransition) {
-      return res.status(409).json({
-        message: "Transizione status non consentita",
-        currentStatus: user.status,
-        requestedStatus: status,
-        allowedTransitions: ["active -> disabled", "disabled -> active"],
-      });
+    // ruolo (opzionale)
+    if (roleName) {
+      const role = await Role.findOne({ roleName }).lean();
+      if (!role) return res.status(400).json({ message: `Ruolo '${roleName}' non esistente` });
+      updates.roles = [role._id];
     }
 
-    user.status = status;
-    await user.save();
+    // status (opzionale) con transizioni consentite
+    if (status) {
+      const allowedTransition =
+        (user.status === "active" && status === "disabled") ||
+        (user.status === "disabled" && status === "active");
+
+      if (!allowedTransition) {
+        return res.status(409).json({
+          message: "Transizione status non consentita",
+          currentStatus: user.status,
+          requestedStatus: status,
+          allowedTransitions: ["active -> disabled", "disabled -> active"],
+        });
+      }
+
+      updates.status = status;
+    }
+
+    const updated = await User.findByIdAndUpdate(id, updates, { new: true })
+      .select("_id name surname email status roles buildingIds")
+      .populate("roles", "roleName")
+      .lean();
 
     return res.json({
-      message: "Status aggiornato",
-      userId: user._id,
-      status: user.status,
+      message: "Utente aggiornato",
+      userId: updated._id,
+      status: updated.status,
+      role: updated.roles?.[0]?.roleName,
+      applied: Object.keys(updates),
     });
   } catch (err) {
     return res.status(500).json({
-      message: "Errore update status",
+      message: "Errore update utente (status/role)",
       error: err.message,
     });
   }
@@ -236,10 +259,33 @@ export const getUsersBuildings = async (req, res) => {
     const { User } = getTenantModels(req);
 
     const missing = String(req.query.missing || "").toLowerCase() === "true";
+    const rawStatus = req.query.status;
 
-    const filter = missing
-      ? { $or: [{ buildingIds: { $exists: false } }, { buildingIds: { $size: 0 } }] }
-      : {};
+    const allowedStatuses = ["pending", "active", "disabled"];
+    let status = null;
+
+    if (rawStatus !== undefined) {
+      status = String(rawStatus).trim().toLowerCase();
+      if (!allowedStatuses.includes(status)) {
+        return res.status(400).json({
+          message: "status non valido",
+          allowed: allowedStatuses,
+        });
+      }
+    }
+
+    const filter = {};
+
+    if (missing) {
+      filter.$or = [
+        { buildingIds: { $exists: false } },
+        { buildingIds: { $size: 0 } },
+      ];
+    }
+
+    if (status) {
+      filter.status = status;
+    }
 
     const users = await User.find(filter)
       .select("_id name surname email status roles buildingIds createdAt")
@@ -272,6 +318,17 @@ export const updateUserBuildings = async (req, res) => {
 
     const { User, Building } = getTenantModels(req);
 
+    // ✅ blocco pending
+    const userDoc = await User.findById(id).select("_id status");
+    if (!userDoc) return res.status(404).json({ message: "Utente non trovato" });
+
+    if (userDoc.status === "pending") {
+      return res.status(409).json({
+        message: "Non puoi assegnare building a un utente 'pending'. Prima approvalo (status -> active).",
+        currentStatus: userDoc.status,
+      });
+    }
+
     const uniqueIds = [...new Set(buildingIds.map(String))];
 
     const existingBuildings = await Building.find({ _id: { $in: uniqueIds } })
@@ -290,8 +347,6 @@ export const updateUserBuildings = async (req, res) => {
       .select("_id name surname email status roles buildingIds")
       .populate("roles", "roleName")
       .lean();
-
-    if (!user) return res.status(404).json({ message: "Utente non trovato" });
 
     return res.json({ message: "Building aggiornati", user });
   } catch (err) {

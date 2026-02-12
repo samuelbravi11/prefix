@@ -70,7 +70,7 @@ onMounted(async () => {
         initSocket({
           userId: authStore.user._id,
           role: authStore.user.roles?.[0]?.roleName,
-          buildingId: authStore.user.buildingId
+          buildingIds: authStore.user.buildingIds || []
         });
 
         await notificationStore.fetchNotifications();

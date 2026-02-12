@@ -53,6 +53,9 @@ export const PERMISSION_MAP = {
   "GET /api/v1/requests/:id": "requests:manage",
   "PUT /api/v1/requests/:id": "requests:manage",
   
+  // ✅ rotta reale (se tieni i controller "userAssignment")
+  "PUT /api/v1/users/:id/assign-buildings": "users:building:update",
+  // TODO QUESTA QUA SOTTO DA CAMBIARE
   "PUT /api/v1/users/:id/assign-building": "users:assign_building",
   
   // roles management --> TODO --> DA RIVEDERE TUTTI I PERMESSI

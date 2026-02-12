@@ -277,9 +277,16 @@ export async function totpVerify(req, res) {
     // =========================
     // AUTO-ASSEGNAZIONE BUILDING (se esiste solo 1)
     // =========================
-    const buildings = await Building.find().select("_id").lean();
-    if (buildings.length === 1) {
-      user.buildingIds = [buildings[0]._id];
+    const hasBuildingsAlready = Array.isArray(user.buildingIds) && user.buildingIds.length > 0;
+
+    if (!hasBuildingsAlready) {
+      const buildingsCount = await Building.countDocuments();
+      if (buildingsCount === 1) {
+        const onlyBuilding = await Building.findOne().select("_id").lean();
+        if (onlyBuilding?._id) {
+          user.buildingIds = [onlyBuilding._id];
+        }
+      }
     }
 
     // =========================

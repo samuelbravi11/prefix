@@ -53,7 +53,7 @@ function ensureTenantModels(conn) {
 /**
  * Restituisce i modelli tenant per la richiesta.
  */
-export async function getTenantModels(req) {
+export function getTenantModels(req) {
   if (!req?.tenant?.dbName) {
     throw new Error("Tenant context missing on req (req.tenant.dbName).");
   }

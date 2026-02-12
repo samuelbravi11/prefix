@@ -50,6 +50,11 @@ app.use(cookieParser());
 // LOGGER
 app.use(requestLogger);
 
+// ====================================================
+// TENANT CONTEXT – solo da qui in poi serve tenant
+// ====================================================
+app.use(tenantContext);
+
 
 
 /* ----------------------------------------------------------------------
@@ -69,11 +74,6 @@ app.post("/rbac/decide", rbacDecisionController);
 
 app.use("/api/v1/platform", tenantProvisionRoutes);
 
-
-// ====================================================
-// TENANT CONTEXT – solo da qui in poi serve tenant
-// ====================================================
-app.use(tenantContext);
 
 // ====================================================
 // PROXY SIGNATURE – blocca accessi diretti

@@ -79,6 +79,16 @@ const routes = [
         name: "notifiche",
         component: () => import("@/views/Notifiche.vue"),
       },
+      {
+        path: "gestione-utenti",
+        name: "gestione-utenti",
+        component: () => import("@/views/UserManagement.vue"),
+      },
+      {
+        path: "assegna-edifici",
+        name: "assegna-edifici",
+        component: () => import("@/views/UserBuildingsManagement.vue"),
+      },
     ],
   },
 ];

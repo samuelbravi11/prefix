@@ -68,7 +68,7 @@ export async function createAssignRoleRequest(req, res) {
     const request = await Request.create({
       requestType: "ASSIGN_ROLE",
       userId,
-      payload: { roleName },
+      payload: { roleName: role },
       createdBy: req.user._id,
     });
 

@@ -1,4 +1,4 @@
-// src/middlewares/requireRegistrationToken.js
+// src/middleware/requireRegistrationToken.js
 import { verifyRegistrationToken } from "../services/registrationToken.service.js";
 
 /**
