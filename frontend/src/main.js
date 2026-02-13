@@ -14,6 +14,10 @@ import 'primevue/resources/primevue.css'
 import 'primeicons/primeicons.css'
 import 'primevue/resources/primevue.min.css'
 
+import axios from 'axios';
+
+axios.defaults.baseURL = import.meta.env.VITE_API_BASE_URL;
+
 const app = createApp(App);
 const pinia = createPinia();
 

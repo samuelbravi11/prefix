@@ -11,6 +11,9 @@ import rbacGuard from "./middleware/rbacGuard.middleware.js";
 import { emitEvent } from "./gateway/ws.gateway.js";
 import { setupSwagger } from "./swagger/setupSwagger.js";
 
+const internalUrl = new URL(process.env.INTERNAL_SERVER_URL || 'http://127.0.0.1:4000');
+const internalHost = internalUrl.hostname;
+const internalPort = internalUrl.port || '4000';
 
 const proxyApp = express();
 
@@ -29,7 +32,7 @@ proxyApp.use("/api", (req, res, next) => {
   La preflight request è sostanzialmente la richiesta verso il server per chiedergli: “Sei d’accordo che io faccia un POST con questi header?” (cors)
 */
 proxyApp.use(cors({
-  origin: "http://localhost:5173",
+  origin: process.env.FRONTEND_URL || "http://localhost:5173",
   credentials: true
 }));
 
@@ -79,8 +82,8 @@ const manualProxy = (req, res) => {
   console.log(`[MANUAL PROXY] Inoltrando richiesta: ${req.method} ${req.originalUrl}`);
 
   const options = {
-    hostname: '127.0.0.1',
-    port: 4000,
+    hostname: internalHost,
+    port: parseInt(internalPort, 10),
     path: req.originalUrl,
     method: req.method,
     headers: {
@@ -89,7 +92,7 @@ const manualProxy = (req, res) => {
       'x-internal-proxy': 'true',
       // proxy passa solo id user --> sarà il server interno connesso al DB a ricostruirsi l'utente e verificare se è attivo
       'x-user-id': req.user._id.toString(),
-      host: '127.0.0.1:4000',
+      host: `${internalHost}:${internalPort}`,
       connection: 'close',
     }
   };
@@ -156,14 +159,14 @@ proxyApp.use("/auth", (req, res) => {
   const fullPath = req.baseUrl + (req.path === '/' ? '' : req.path);
   
   const options = {
-    hostname: '127.0.0.1',
-    port: 4000,
+    hostname: internalHost,
+    port: parseInt(internalPort, 10),
     path: fullPath,
     method: req.method,
     headers: {
       ...req.headers,
       'x-internal-proxy': 'true',
-      'host': '127.0.0.1:4000'
+      'host': `${internalHost}:${internalPort}`
     }
   };
   
@@ -201,14 +204,14 @@ proxyApp.use("/rbac", (req, res) => {
   const fullPath = req.baseUrl + (req.path === '/' ? '' : req.path);
   
   const options = {
-    hostname: '127.0.0.1',
-    port: 4000,
+    hostname: internalHost,
+    port: parseInt(internalPort, 10),
     path: fullPath,
     method: req.method,
     headers: {
       ...req.headers,
       'x-internal-proxy': 'true',
-      'host': '127.0.0.1:4000'
+      'host': `${internalHost}:${internalPort}`
     }
   };
   

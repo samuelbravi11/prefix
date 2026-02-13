@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:6
+    container_name: prefix-mongo
+    restart: unless-stopped
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+    networks:
+      - prefix-network
+
+  python-ai:
+    build: ./ai-service
+    container_name: prefix-python
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - prefix-network
+    volumes:
+      - huggingface-cache:/root/.cache/huggingface
+
+  internal-server:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.internal
+    container_name: prefix-internal
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    depends_on:
+      - mongodb
+      - python-ai
+    env_file:
+      - ./backend/.env
+    environment:
+      # Sovrascrivi per puntare ai container
+      - MONGO_URI=mongodb+srv://admin:mfwaulc8dkOQz2kX@PreFixClusterDB.qrw3tse.mongodb.net/PreFix?retryWrites=true&w=majority
+      - PYTHON_SERVICE_URL=http://python-ai:8000
+      - PROXY_INTERNAL_URL=http://proxy:5000
+    networks:
+      - prefix-network
+
+  proxy:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.proxy
+    container_name: prefix-proxy
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    depends_on:
+      - internal-server
+    env_file:
+      - ./backend/.env
+    environment:
+      - INTERNAL_SERVER_URL=http://internal-server:4000
+    networks:
+      - prefix-network
+
+  frontend:
+    build: ./frontend
+    container_name: prefix-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - proxy
+    networks:
+      - prefix-network
+
+volumes:
+  mongo-data:
+  huggingface-cache:
+
+networks:
+  prefix-network:
+    driver: bridge

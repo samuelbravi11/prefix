@@ -28,7 +28,7 @@ export const startScheduler = () => {
 
   // avvia una chiamata asincrona su setInterval ogni tot minuti (definito su .env)
   setInterval(async () => {
-    console.log('[SCHEDULER] Tick')
+    //console.log('[SCHEDULER] Tick')
 
     // trova tutti gli asset con stato attivo
     const assets = await getAllActiveAssets()

@@ -19,7 +19,7 @@ async function startServer() {
     // Avvio server SOLO dopo DB
     const PORT = 4000;
 
-    app.listen(PORT, "127.0.0.1", () => {
+    app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server interno attivo su 127.0.0.1:${PORT}`);
       console.log(`DB in uso: ${process.env.DB_NAME}`);
       // Avvio lo scheduler solo una volta --> vive dentro il server interno decisionale

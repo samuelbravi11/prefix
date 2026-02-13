@@ -80,15 +80,22 @@ export async function register(req, res) {
    LOGIN
 --------------------------------------------------- */
 export async function login(req, res) {
+  console.log("[LOGIN] Request body:", req.body);
   try {
     const { email, password, fingerprintHash } = req.body;
+    console.log("[LOGIN] Email:", email, "Fingerprint:", fingerprintHash);
 
     const user = await userService.verifyLogin(email, password);
+    console.log("[LOGIN] User found:", user ? user._id : "No");
+    
     if (!user) {
+      console.log("[LOGIN] Invalid credentials");
       return res.status(401).json({ message: "Credenziali errate" });
     }
 
     if (user.status !== "active") {
+      console.log("[LOGIN] User not active:", user.status);
+
       await AuditLog.create({
         entityType: "AUTH",
         entityId: user._id,
@@ -112,6 +119,7 @@ export async function login(req, res) {
     const refreshToken = await generateRefreshToken(payload);
 
     await userService.addRefreshToken(user._id, refreshToken, fingerprintHash);
+    console.log("[LOGIN] Imposto cookie refreshToken");
     setRefreshTokenCookie(res, refreshToken);
 
     await AuditLog.create({
@@ -131,7 +139,7 @@ export async function login(req, res) {
     });
 
   } catch (err) {
-    console.error("Errore login:", err);
+    console.error("[LOGIN] Error:", err);
     return res.status(500).json({ message: "Errore server login" });
   }
 }

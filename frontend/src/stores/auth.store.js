@@ -31,9 +31,8 @@ export const useAuthStore = defineStore("auth", {
         console.log("DEBUG: Chiamando /auth/me...");
         // Usa axios diretta per /auth/me
         const response = await axios.get("/auth/me", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true
         });
         console.log("DEBUG: Risposta da /auth/me:", response.data);
         this.user = response.data;

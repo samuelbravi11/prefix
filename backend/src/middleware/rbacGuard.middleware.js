@@ -32,7 +32,8 @@ export default async function rbacGuard(req, res, next) {
     // qua il proxy deve chiedere al PDP se l'utente ha il permesso richiesto
     // per questo chiamo la route interna del PDP che ho esposto appositamente per il proxy
     // il suo compito è solo quello di fare da tramite tra il proxy e il PDP vero e proprio (rbacDecisionController)
-    const response = await fetch("http://localhost:4000/rbac/decide", {
+    const internalUrl = process.env.INTERNAL_SERVER_URL || 'http://localhost:4000';
+    const response = await fetch(`${internalUrl}/rbac/decide`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -31,7 +31,7 @@ async function startProxyServer() {
         // Il server ora gestisce due canali logici:
         // - HTTP → REST / Proxy / RBAC
         // - WebSocket → eventi realtime
-        server.listen(PORT, "127.0.0.1", () => {
+        server.listen(PORT, "0.0.0.0", () => {
             console.log(`Server Proxy avviato su 127.0.0.1:${PORT}`);
         });
     } catch (error) {

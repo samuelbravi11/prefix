@@ -1,48 +1,43 @@
 import axios from "axios";
 import { getDeviceFingerprint } from "../utils/fingerprint.js";
 
-// ho configurato un vite_proxy su vite.config.js in grado che ad ogni percorso relativo mi traduca la path con l'url intero del server Proxy
-// esempio: /auth/login --> http:localhost:5000/auth/login
-const API_URL = "http://localhost:5000";
+// Legge l'URL base dalle variabili d'ambiente (impostata su Render)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 export async function login(email, password) {
   const fingerprint = await getDeviceFingerprint();
   
-  console.log("[VUE DEBUG] Chiamando login a:", "/auth/login");
+  console.log("[VUE DEBUG] Chiamando login a:", `${API_BASE_URL}/auth/login`);
   console.log("[VUE DEBUG] Fingerprint hash:", fingerprint.hash);
 
-  // SALVA IL FINGERPRINT PER IL REFRESH
   localStorage.setItem("fingerprintHash", fingerprint.hash);
 
-  return axios.post("/auth/login", {
+  return axios.post(`${API_BASE_URL}/auth/login`, {
     email,
     password,
     fingerprintHash: fingerprint.hash
+  }, {
+    withCredentials: true
   });
 }
 
 export async function register({ email, password, name, surname = "" }) {
   const fingerprint = await getDeviceFingerprint();
 
-  return axios.post(
-    "/auth/register",
-    {
-      email,
-      password,
-      name,
-      surname,
-      fingerprintHash: fingerprint.hash
-    },
-    {
-      withCredentials: true
-    }
-  );
+  return axios.post(`${API_BASE_URL}/auth/register`, {
+    email,
+    password,
+    name,
+    surname,
+    fingerprintHash: fingerprint.hash
+  }, {
+    withCredentials: true
+  });
 }
 
 export async function fetchMe() {
   const token = localStorage.getItem("accessToken");
-
-  return axios.get("/auth/me", {
+  return axios.get(`${API_BASE_URL}/auth/me`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },

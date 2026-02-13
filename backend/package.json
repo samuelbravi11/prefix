@@ -15,18 +15,24 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
     "start_local": "node --env-file=.env src/server.js",
     "start_proxy:win": "set NODE_OPTIONS=--no-deprecation && node --env-file=.env src/proxyServer.js",
     "start_proxy:unix": "NODE_OPTIONS=--no-deprecation node --env-file=.env src/proxyServer.js"
   },
   "devDependencies": {
-    "dotenv": "^17.2.3"
+    "@types/jest": "^30.0.0",
+    "jest": "^30.2.0",
+    "mongodb-memory-server": "^11.0.1",
+    "supertest": "^7.2.2"
   },
   "dependencies": {
     "@fingerprintjs/fingerprintjs-pro": "^3.12.4",
     "accepts": "^2.0.0",
     "bcrypt": "^6.0.0",
+    "dotenv": "^17.3.1",
     "bcryptjs": "^3.0.3",
     "body-parser": "^2.2.1",
     "bytes": "^3.1.2",
@@ -40,7 +46,6 @@
     "cors": "^2.8.5",
     "debug": "^4.4.3",
     "depd": "^2.0.0",
-    "dotenv": "^17.2.3",
     "dunder-proto": "^1.0.1",
     "ee-first": "^1.1.1",
     "encodeurl": "^2.0.0",

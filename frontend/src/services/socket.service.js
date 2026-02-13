@@ -6,12 +6,10 @@ let socket = null;
 export function initSocket({ userId, role, buildingId }) {
   if (socket) return;
 
+  const WS_URL = import.meta.env.VITE_WS_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'
+  
   // Il browser apre una connessione verso il server proxy (5000)
-  socket = io("http://localhost:5000", {
-    auth: { // Invia il token JWT per autenticazione WS (nell'handshake iniziale)
-      token: localStorage.getItem("accessToken")
-    }
-  });
+  socket = io(WS_URL, { auth: { token: localStorage.getItem("accessToken") } })
 
   // Invia dati di join per stanza personalizzata --> server li userà per organizzare le stanze (rooms), utilizzate per inviare notifiche mirate
   // Nota: il server verifica sempre i dati in ingresso, non fidarti mai del client

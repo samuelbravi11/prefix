@@ -201,6 +201,8 @@ async function login() {
     
     // Usa la stessa funzione per inizializzare
     await initializeSelectedBuildings();
+
+    console.log("Login response:", response.data);
     
     router.push("/");
     
