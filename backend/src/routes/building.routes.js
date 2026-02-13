@@ -4,7 +4,7 @@ import * as buildingController from "../controllers/building.controller.js";
 const router = express.Router();
 
 /*
-  GET /api/v1/buildings/myBuildings
+  GET /api/v1/buildings
   Edifici comunali a cui sono associato
 */
 router.get("/", buildingController.getMyBuildings);

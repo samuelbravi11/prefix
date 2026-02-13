@@ -14,7 +14,7 @@ export function sha256(value) {
  */
 export function aesGcmEncrypt(plainText, keyB64) {
   const key = Buffer.from(keyB64, "base64"); // 32 bytes
-  if (key.length !== 32) throw new Error("TOTP_ENC_KEY_B64 must be 32 bytes base64");
+  if (key.length !== 32) throw new Error("TOTP_ENC_KEY must be 32 bytes base64");
 
   const iv = crypto.randomBytes(12); // 96-bit nonce (standard GCM)
   const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
@@ -35,7 +35,7 @@ export function aesGcmEncrypt(plainText, keyB64) {
  */
 export function aesGcmDecrypt(encB64, keyB64) {
   const key = Buffer.from(keyB64, "base64");
-  if (key.length !== 32) throw new Error("TOTP_ENC_KEY_B64 must be 32 bytes base64");
+  if (key.length !== 32) throw new Error("TOTP_ENC_KEY must be 32 bytes base64");
 
   const data = Buffer.from(encB64, "base64");
   const iv = data.subarray(0, 12);

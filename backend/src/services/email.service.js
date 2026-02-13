@@ -7,6 +7,13 @@ const resend = new Resend(process.env.RESEND_API_KEY);
  * - Non loggare mai otpCode in produzione.
 */
 export async function sendEmailOtp({ to, otpCode, expiresAt }) {
+  // TODO RIMUOVI QUESTO LOG SOTTO
+  console.log("[DEV EMAIL OTP]", { to, otpCode, expiresAt: expiresAt.toISOString() });
+  if (process.env.NODE_ENV !== "development") {
+    console.log("[DEV EMAIL OTP]", { to, otpCode, expiresAt: expiresAt.toISOString() });
+    return { dev: true };
+  }
+  
   if (!process.env.RESEND_API_KEY) {
     throw new Error("Missing RESEND_API_KEY");
   }

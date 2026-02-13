@@ -135,7 +135,7 @@ import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth.store";
 import { useSelectedBuildingsStore } from '@/stores/selectedBuildings';
-import { login as loginService } from "@/api/authService.js";
+import { loginStart } from "@/api/authService.js";
 import axios from "axios";
 import bgImage from "../assets/images/login_image.jpg";
 
@@ -194,23 +194,23 @@ async function login() {
   loading.value = true;
 
   try {
-    const response = await loginService(email.value, password.value);
-    localStorage.setItem("accessToken", response.data.accessToken);
-    
-    await authStore.fetchMe();
-    
-    // Usa la stessa funzione per inizializzare
-    await initializeSelectedBuildings();
-    
-    router.push("/");
-    
+    const response = await loginStart(email.value, password.value);
+
+    // salva challenge token (durata breve, meglio sessionStorage)
+    sessionStorage.setItem("loginChallengeToken", response.data.challengeToken);
+
+    // vai alla pagina TOTP dedicata
+    router.push("/login/totp");
   } catch (error) {
-    console.error("Errore login:", error);
-    
+    console.log("STATUS", error.response?.status);
+    console.log("DATA", error.response?.data);
+    console.log("HEADERS", error.response?.headers);
+    console.error("Errore login/start:", error);
+
     if (error.response?.status === 401) {
       alert("Email o password errati");
     } else if (error.response?.status === 403) {
-      alert("Utente non ancora attivo");
+      alert(error.response?.data?.message || "Utente non attivo / TOTP non abilitato");
     } else {
       alert("Errore durante il login");
     }

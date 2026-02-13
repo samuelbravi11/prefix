@@ -25,11 +25,37 @@ import jwt from "jsonwebtoken";
 */
 let io = null;
 
+const DEV_ALLOWED_ORIGINS = new Set([
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://test12.lvh.me:5173",
+]);
+
+function isAllowedWsOrigin(origin) {
+  if (!origin) return true; // curl / tools / same-origin
+  if (DEV_ALLOWED_ORIGINS.has(origin)) return true;
+
+  // allow http://<sub>.lvh.me:5173
+  try {
+    const u = new URL(origin);
+    return (
+      u.protocol === "http:" &&
+      u.hostname.endsWith(".lvh.me") &&
+      u.port === "5173"
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function initWebSocket(server) {
   io = new Server(server, {
     cors: {
-      origin: "http://localhost:5173",
-      credentials: false, // usi JWT, non cookie
+      origin: (origin, cb) => {
+        if (isAllowedWsOrigin(origin)) return cb(null, true);
+        return cb(new Error("Not allowed by CORS"));
+      },
+      credentials: true, // ok anche se usi JWT; serve per cors preflight/handshake in certi casi
     },
   });
 

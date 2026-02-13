@@ -38,6 +38,7 @@ app.use((req, res, next) => {
   console.log("Path:", req.path);
   console.log("Base URL:", req.baseUrl);
   console.log("Headers x-internal-proxy:", req.headers['x-internal-proxy']);
+  console.log("Authorization header:", req.headers.authorization ? "PRESENTE" : "ASSENTE");
   console.log("=== END INTERNAL SERVER REQUEST ===\n");
   next();
 });

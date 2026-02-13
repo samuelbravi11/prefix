@@ -1,10 +1,14 @@
-import { getBuildingsByUser } from "../repositories/building.repository.js";
+import * as buildingRepo from "../repositories/building.repository.js";
 
-export const getMyBuildings = async (req, res) => {
+export async function getMyBuildings(req, res) {
   try {
-    const buildings = await getBuildingsByUser(req.user);
-    res.json(buildings);
+    const buildings = await buildingRepo.getBuildingsByUser(req, req.user);
+    return res.json(buildings);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("[getMyBuildings] error:", err);
+    return res.status(500).json({
+      message: "Errore caricamento edifici",
+      error: err.message,
+    });
   }
-};
+}

@@ -1,36 +1,61 @@
+// src/services/socket.service.js
 import { io } from "socket.io-client";
-import { useNotificationStore } from "@/stores/notification.store";
 
+// Mantieni singleton
 let socket = null;
 
-export function initSocket({ userId, role, buildingId }) {
-  if (socket) return;
+/**
+ * initSocket
+ * - connette al server socket.io tramite Vite proxy (path relativo)
+ * - autentica via JWT (handshake.auth.token)
+ * - join rooms dopo connect
+ */
+export function initSocket({ token, userId, role, buildingIds } = {}) {
+  if (!token) {
+    console.warn("[socket] initSocket skipped: missing token");
+    return null;
+  }
 
-  // Il browser apre una connessione verso il server proxy (5000)
-  socket = io("http://localhost:5000", {
-    auth: { // Invia il token JWT per autenticazione WS (nell'handshake iniziale)
-      token: localStorage.getItem("accessToken")
-    }
+  // già connesso/inizializzato
+  if (socket) return socket;
+
+  socket = io("/", {
+    path: "/socket.io",
+    transports: ["polling", "websocket"],
+    auth: { token },
+    withCredentials: true, // ok, anche se JWT; non rompe
+    reconnection: true,
+    reconnectionAttempts: 5,      // evita loop infinito
+    reconnectionDelay: 500,
+    reconnectionDelayMax: 3000,
+    timeout: 8000,
   });
 
-  // Invia dati di join per stanza personalizzata --> server li userà per organizzare le stanze (rooms), utilizzate per inviare notifiche mirate
-  // Nota: il server verifica sempre i dati in ingresso, non fidarti mai del client
-  socket.emit("join", { userId, role, buildingId });
-
-  // Gestione evento di notifica in arrivo dal server
-  // - Socket.IO riceve l’evento
-  // - Il dato viene inserito nello store Pinia
-  // - Tutta la UI che usa quello store si aggiorna automaticamente
-  socket.on("notification", (data) => {
-    const notificationStore = useNotificationStore();
-    notificationStore.addNotification(data);
+  socket.on("connect", () => {
+    // join rooms (il server controlla userId vs token)
+    socket.emit("join", { userId, role, buildingIds });
   });
+
+  socket.on("connect_error", (err) => {
+    console.error("[socket] connect_error:", err?.message || err);
+  });
+
+  socket.on("disconnect", (reason) => {
+    // utile per debug
+    // console.log("[socket] disconnected:", reason);
+  });
+
+  return socket;
 }
 
-// Chiude la connessione socket
+export function getSocket() {
+  return socket;
+}
+
 export function closeSocket() {
   if (socket) {
+    socket.removeAllListeners();
     socket.disconnect();
-    socket = null;
   }
+  socket = null;
 }

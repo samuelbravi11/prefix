@@ -17,6 +17,7 @@
     "axios": "^1.13.2",
     "bootstrap": "^5.3.8",
     "echarts": "^6.0.0",
+    "js-sha256": "^0.11.1",
     "pinia": "^3.0.4",
     "primeicons": "^7.0.0",
     "primevue": "^3.46.0",

@@ -11,53 +11,187 @@ import rbacGuard from "./middleware/rbacGuard.middleware.js";
 import { emitEvent } from "./gateway/ws.gateway.js";
 import { setupSwagger } from "./swagger/setupSwagger.js";
 
+const INTERNAL_HOST = process.env.INTERNAL_HOST || "127.0.0.1";
+const INTERNAL_PORT = Number(process.env.INTERNAL_PORT || 4000);
+
+const DEV_ALLOWED_ORIGINS = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  // consenti *.lvh.me:5173 (wildcard) tramite funzione sotto
+];
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true; // tools / curl / same-origin
+  if (DEV_ALLOWED_ORIGINS.includes(origin)) return true;
+
+  // allow http://<sub>.lvh.me:5173
+  try {
+    const u = new URL(origin);
+    return (
+      u.protocol === "http:" &&
+      u.hostname.endsWith(".lvh.me") &&
+      u.port === "5173"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function getForwardedHost(req) {
+  // IMPORTANTE: strip porta (test12.lvh.me:5173 -> test12.lvh.me)
+  const raw =
+    req.headers["x-forwarded-host"] ||
+    req.headers["x-original-host"] ||
+    req.headers.host ||
+    "";
+  return String(raw).split(":")[0];
+}
+
+function getForwardedProto(req) {
+  return String(req.headers["x-forwarded-proto"] || "http");
+}
+
+function hasJsonBody(req) {
+  return (
+    req.method !== "GET" &&
+    req.method !== "HEAD" &&
+    req.body &&
+    Object.keys(req.body).length > 0
+  );
+}
+
+function pickHeaders(incoming, allowList) {
+  const out = {};
+  for (const k of allowList) {
+    const v = incoming[k];
+    if (v !== undefined && v !== null && v !== "") out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * Proxy low-level verso internal API.
+ * - Preserva req.originalUrl (evita bug /auth prefix “consumato”)
+ * - Inoltra cookie e set-cookie
+ * - Aggiunge sigillo x-internal-*
+ * - Forward host/proto tenant-aware (HOST SENZA PORTA)
+ * - CORS response coerente con Origin reale (non hardcoded localhost)
+ */
+function forwardToInternal({ includeUserId = false } = {}) {
+  return (req, res) => {
+    const forwardedHost = getForwardedHost(req);
+    const forwardedProto = getForwardedProto(req);
+
+    const bodyPresent = hasJsonBody(req);
+    const bodyString = bodyPresent ? JSON.stringify(req.body) : "";
+
+    // whitelist headers sensati
+    const base = pickHeaders(req.headers, [
+      "accept",
+      "accept-language",
+      "content-type",
+      "authorization",
+      "cookie",
+      "user-agent",
+      "referer",
+      "origin",
+      "sec-fetch-site",
+      "sec-fetch-mode",
+      "sec-fetch-dest",
+    ]);
+
+    const headers = {
+      ...base,
+      ...(bodyPresent ? { "content-length": Buffer.byteLength(bodyString) } : {}),
+
+      // sigillo interno
+      "x-internal-proxy": "true",
+      "x-internal-secret": process.env.INTERNAL_PROXY_SECRET || "",
+
+      // multi-tenant context (HOST SENZA PORTA)
+      "x-forwarded-host": forwardedHost,
+      "x-forwarded-proto": forwardedProto,
+
+      // userId dal proxy (solo API protette)
+      ...(includeUserId && req.user?._id ? { "x-user-id": String(req.user._id) } : {}),
+
+      // host verso internal server
+      host: `${INTERNAL_HOST}:${INTERNAL_PORT}`,
+      connection: "close",
+    };
+
+    const options = {
+      hostname: INTERNAL_HOST,
+      port: INTERNAL_PORT,
+      path: req.originalUrl, // <-- fondamentale
+      method: req.method,
+      headers,
+    };
+
+    const proxyReq = http.request(options, (proxyRes) => {
+      // --- Response headers ---
+      const responseHeaders = { ...proxyRes.headers };
+
+      // CORS: usa l’origin reale (se consentito)
+      const origin = req.headers.origin;
+      if (origin && isAllowedOrigin(origin)) {
+        responseHeaders["access-control-allow-origin"] = origin;
+        responseHeaders["vary"] = "Origin";
+        responseHeaders["access-control-allow-credentials"] = "true";
+        responseHeaders["access-control-expose-headers"] = "set-cookie";
+      }
+
+      res.writeHead(proxyRes.statusCode || 500, responseHeaders);
+      proxyRes.pipe(res);
+    });
+
+    proxyReq.on("error", (err) => {
+      console.error("[PROXY ERROR]", err);
+      if (!res.headersSent) {
+        res.status(500).json({ message: "Proxy error", error: err.message });
+      } else {
+        res.end();
+      }
+    });
+
+    if (bodyPresent) proxyReq.write(bodyString);
+    proxyReq.end();
+  };
+}
 
 const proxyApp = express();
 
-/*
-// DEBUG middleware per vedere tutte le richieste in arrivo
-proxyApp.use("/api", (req, res, next) => {
-  console.log("MATCH /api GENERICO", req.originalUrl);
-  next();
-});
-*/
+/* =========================
+   CORS + preflight
+========================= */
+proxyApp.use(
+  cors({
+    origin: (origin, cb) => {
+      if (isAllowedOrigin(origin)) return cb(null, true);
+      return cb(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+  })
+);
 
-/* CORS
-  intercetta TUTTE le richieste OPTIONS --> risponde subito, senza passare da: requireAuth, rbacGuard e altri middleware
-  questo perché OPTIONS non è una richiesta dell’utente, è una richiesta tecnica del browser (necessaria per fare le chiamate API)
-  se l'OPTIONS passa da requireAuth --> il server non permette al browser la richiesta e si ferma in preflight
-  La preflight request è sostanzialmente la richiesta verso il server per chiedergli: “Sei d’accordo che io faccia un POST con questi header?” (cors)
-*/
-proxyApp.use(cors({
-  origin: "http://localhost:5173",
-  credentials: true
-}));
+// gestisci preflight velocemente
+// proxyApp.options("*", cors());
 
-// BODY PARSER
+/* =========================
+   Parsers + Logger
+========================= */
 proxyApp.use(express.json());
 proxyApp.use(cookieParser());
-
-// LOGGER
 proxyApp.use(requestLogger);
 
-
-/* =====================================================
-  SWAGGER UI – DOCUMENTAZIONE PUBBLICA
-  ======================================================
-  - accessibile a chiunque
-  - NON passa da auth
-  - NON passa da RBAC
-  - solo lettura documentazione
-*/
+/* =========================
+   Swagger (pubblico)
+========================= */
 setupSwagger(proxyApp);
 
-
-/* ROUTE PER GESTIRE LE NOTIFICHE
-  Il proxy:
-  - riceve la notifica dal server interno (notification.service.js)
-  - non conosce il dominio dell'evento, si limita a inoltrarlo
-  - emette l'evento WS verso i client connessi in base a userId/role/buildingId (rooms)
-*/
+/* =========================
+   Internal events (solo server interno)
+========================= */
 proxyApp.post("/internal/events", (req, res) => {
   if (req.headers["x-internal-proxy"] !== "true") {
     return res.status(403).json({ message: "Forbidden" });
@@ -71,14 +205,13 @@ proxyApp.post("/internal/events", (req, res) => {
     }
   }
 
-  // payload atteso:
-  // { userIds: string[], event: {...} }
   const { userIds, event } = req.body || {};
   if (!Array.isArray(userIds) || !event) {
-    return res.status(400).json({ message: "Invalid payload", expected: { userIds: [], event: {} } });
+    return res
+      .status(400)
+      .json({ message: "Invalid payload", expected: { userIds: [], event: {} } });
   }
 
-  // fan-out verso room user:<id>
   for (const uid of userIds) {
     emitEvent({ userId: uid, ...event });
   }
@@ -86,286 +219,119 @@ proxyApp.post("/internal/events", (req, res) => {
   return res.status(204).end();
 });
 
+/* =========================
+   PUBLIC ROUTES: /auth/**
+   (NO requireAuth, NO RBAC)
+========================= */
+proxyApp.use("/auth", forwardToInternal({ includeUserId: false }));
 
-/* =====================================================
-   FUNZIONE DI PROXY MANUALE
-===================================================== */
-// Si occupa di inoltrare la richiesta al server interno usando http.request e settando manualmente l'header x-internal-proxy
-const manualProxy = (req, res) => {
-  console.log(`[MANUAL PROXY] Inoltrando richiesta: ${req.method} ${req.originalUrl}`);
+/* =========================
+   PDP: /rbac/**
+   (usato dal proxy per decisioni)
+========================= */
+proxyApp.use("/rbac", forwardToInternal({ includeUserId: false }));
 
-  const originalHost =
-    req.headers["x-forwarded-host"] ||
-    req.headers["x-original-host"] ||
-    req.headers.host;
+/* =========================
+   TENANT CREATE: /api/v1/platform/tenants
+   (solo seed key, no JWT, no RBAC)
+========================= */
+proxyApp.post("/api/v1/platform/tenants", (req, res) => {
+  // forward seed key se presente
+  const forwardedHost = getForwardedHost(req);
+  const forwardedProto = getForwardedProto(req);
+
+  const bodyPresent = hasJsonBody(req);
+  const bodyString = bodyPresent ? JSON.stringify(req.body) : "";
+
+  const headers = {
+    "content-type": req.headers["content-type"] || "application/json",
+    ...(bodyPresent ? { "content-length": Buffer.byteLength(bodyString) } : {}),
+
+    "x-internal-proxy": "true",
+    "x-internal-secret": process.env.INTERNAL_PROXY_SECRET || "",
+    ...(req.headers["x-platform-seed-key"]
+      ? { "x-platform-seed-key": req.headers["x-platform-seed-key"] }
+      : {}),
+
+    "x-forwarded-host": forwardedHost,
+    "x-forwarded-proto": forwardedProto,
+
+    host: `${INTERNAL_HOST}:${INTERNAL_PORT}`,
+    connection: "close",
+  };
 
   const options = {
-    hostname: '127.0.0.1',
-    port: 4000,
+    hostname: INTERNAL_HOST,
+    port: INTERNAL_PORT,
     path: req.originalUrl,
-    method: req.method,
-    headers: {
-      ...req.headers,
-      // sigillo di fiducia
-      'x-internal-proxy': 'true',
-      // chiave
-      "x-internal-secret": process.env.INTERNAL_PROXY_SECRET || "",
-      // proxy passa solo id user --> sarà il server interno connesso al DB a ricostruirsi l'utente e verificare se è attivo
-      'x-user-id': req.user?._id?.toString?.() || '',
-      // host originale da cui arriva la risposta --> per subdomain multi-tenant
-      'x-forwarded-host': originalHost,
-      'x-forwarded-proto': req.headers['x-forwarded-proto'] || 'http',
-      'x-platform-seed-key': req.headers['x-platform-seed-key'],
-      host: '127.0.0.1:4000',
-      connection: 'close',
-    }
+    method: "POST",
+    headers,
   };
-  
-  console.log(`[MANUAL PROXY] Opzioni: ${JSON.stringify({
-    method: options.method,
-    path: options.path,
-    headers: {
-      'x-internal-proxy': options.headers['x-internal-proxy'],
-      'authorization': options.headers['authorization'] ? 'presente' : 'assente'
-    }
-  }, null, 2)}`);
-  
+
   const proxyReq = http.request(options, (proxyRes) => {
-    console.log(`[MANUAL PROXY] Risposta dal server interno: ${proxyRes.statusCode} ${req.originalUrl}`);
-    
-    // Inoltra gli header della risposta
     const responseHeaders = { ...proxyRes.headers };
-    
-    // Assicurati che CORS sia gestito correttamente
-    responseHeaders['access-control-allow-origin'] = 'http://localhost:5173';
-    responseHeaders['access-control-allow-credentials'] = 'true';
-    
-    res.writeHead(proxyRes.statusCode, responseHeaders);
-    
-    // Pipe della risposta al client
-    proxyRes.pipe(res);
-  });
-  
-  proxyReq.on('error', (err) => {
-    console.error('[MANUAL PROXY ERROR]', err);
-    res.status(500).json({ 
-      message: 'Proxy error',
-      error: err.message 
-    });
-  });
-  
-  // Se c'è un body, invialo
-  if (req.body && Object.keys(req.body).length > 0) {
-    const bodyString = JSON.stringify(req.body);
-    proxyReq.write(bodyString);
-    console.log(`[MANUAL PROXY] Inviando body (${bodyString.length} bytes)`);
-  }
-  
-  proxyReq.end();
-};
 
-/* BUGFIX
-  Inoltravo la richiesta da proxy a server e si cancellava la prima parte della route auth (esempio: proxy (/auth/login) --> server (/login)).
-  Per questo motivo (solo per la parte di API pubbliche) ho configurato manualmente il proxy.
-  
-  Il problema era dovuto al fatto che, nelle route pubbliche (/auth), il proxy era implementato manualmente usando http.request e costruiva il path della richiesta usando req.path,
-  che in Express non contiene il prefisso della route montata (/auth viene “consumato” da app.use("/auth", ...));
-  di conseguenza la richiesta /auth/login veniva inoltrata al server interno come /login.
-  Nelle route private il problema non si presentava perché veniva usato http-proxy-middleware,
-  che inoltra correttamente l’URL completo (req.originalUrl) e gestisce automaticamente il path rewriting.
-*/ // MANUAL PROXY PER /auth
-/* =====================================================
-   PUBLIC ROUTES - AUTH
-===================================================== */
-proxyApp.use("/auth", (req, res) => {
-  console.log("[MANUAL PROXY /auth] Inoltrando richiesta:", req.method, req.path);
-  
-  const fullPath = req.baseUrl + (req.path === '/' ? '' : req.path);
-  
-  const originalHost =
-    req.headers["x-forwarded-host"] ||
-    req.headers["x-original-host"] ||
-    req.headers.host;
-
-  const options = {
-    hostname: '127.0.0.1',
-    port: 4000,
-    path: fullPath,
-    method: req.method,
-    headers: {
-      ...req.headers,
-      'x-internal-proxy': 'true',
-      "x-internal-secret": process.env.INTERNAL_PROXY_SECRET || "",
-      'x-forwarded-host': originalHost,
-      'host': '127.0.0.1:4000'
+    const origin = req.headers.origin;
+    if (origin && isAllowedOrigin(origin)) {
+      responseHeaders["access-control-allow-origin"] = origin;
+      responseHeaders["vary"] = "Origin";
+      responseHeaders["access-control-allow-credentials"] = "true";
+      responseHeaders["access-control-expose-headers"] = "set-cookie";
     }
-  };
-  
-  const proxyReq = http.request(options, (proxyRes) => {
-    res.writeHead(proxyRes.statusCode, proxyRes.headers);
+
+    res.writeHead(proxyRes.statusCode || 500, responseHeaders);
     proxyRes.pipe(res);
   });
-  
-  proxyReq.on('error', (err) => {
-    console.error('[MANUAL PROXY /auth ERROR]', err);
-    res.status(500).json({ 
-      message: 'Proxy error',
-      error: err.message 
-    });
+
+  proxyReq.on("error", (err) => {
+    console.error("[TENANT PROXY ERROR]", err);
+    res.status(500).json({ message: "Proxy error", error: err.message });
   });
-  
-  if (req.body && Object.keys(req.body).length > 0) {
-    proxyReq.write(JSON.stringify(req.body));
-  }
-  
+
+  if (bodyPresent) proxyReq.write(bodyString);
   proxyReq.end();
 });
 
+/* =========================
+   PROTECTED APIs: /api/v1/**
+   (requireAuth + RBAC + forward)
+========================= */
+proxyApp.use("/api/v1/users", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
+proxyApp.use("/api/v1/dashboard", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
+proxyApp.use("/api/v1/requests", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
+proxyApp.use("/api/v1/notifications", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
+proxyApp.use("/api/v1/buildings", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
+proxyApp.use("/api/v1/events", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
+proxyApp.use("/api/v1/interventions", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
+proxyApp.use("/api/v1/calendar", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
 
-/* =====================================================
-   PDP (RBAC DECISION ENDPOINT) --> USATO SOLO DAL PROXY
-===================================================== */
-// Faccio passare tutte le chiamate ad un unico endpoint.
-// Questo perché al PDP interessa solo:
-// - user.ID --> da cui preleva il ruolo e i permessi
-// - permission --> permesso dell'azione originale (da confrontare con i permessi utente)
-proxyApp.use("/rbac", (req, res) => {
-  console.log("[MANUAL PROXY /rbac] Inoltrando richiesta:", req.method, req.path);
-  
-  const fullPath = req.baseUrl + (req.path === '/' ? '' : req.path);
-  
-  const originalHost =
-    req.headers["x-forwarded-host"] ||
-    req.headers["x-original-host"] ||
-    req.headers.host;
-
-  const options = {
-    hostname: '127.0.0.1',
-    port: 4000,
-    path: fullPath,
-    method: req.method,
-    headers: {
-      ...req.headers,
-      'x-internal-proxy': 'true',
-      "x-internal-secret": process.env.INTERNAL_PROXY_SECRET || "",
-      'x-forwarded-host': originalHost,
-      'host': '127.0.0.1:4000'
-    }
-  };
-  
-  const proxyReq = http.request(options, (proxyRes) => {
-    console.log(`[MANUAL PROXY /rbac] Risposta: ${proxyRes.statusCode}`);
-    res.writeHead(proxyRes.statusCode, proxyRes.headers);
-    proxyRes.pipe(res);
-  });
-  
-  proxyReq.on('error', (err) => {
-    console.error('[MANUAL PROXY /rbac ERROR]', err);
-    res.status(500).json({ 
-      message: 'Proxy error',
-      error: err.message 
-    });
-  });
-  
-  if (req.body && Object.keys(req.body).length > 0) {
-    proxyReq.write(JSON.stringify(req.body));
-  }
-  
-  proxyReq.end();
-});
-
-
-// =====================================================
-// CREAZIONE TENANT (solo chiave seed, NO JWT, NO manualProxy)
-// =====================================================
-proxyApp.post("/api/v1/platform/tenants", async (req, res) => {
-  const internalUrl = `${process.env.INTERNAL_API_URL || 'http://localhost:4000'}${req.originalUrl}`;
-
-  console.log(`[TENANT PROXY] → ${internalUrl}`);
-  console.log('[TENANT PROXY] x-platform-seed-key header ricevuto dal client:', req.headers['x-platform-seed-key']);
-
-  try {
-    const response = await fetch(internalUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-internal-proxy': 'true',
-        'x-internal-secret': process.env.INTERNAL_PROXY_SECRET || '',
-        'x-platform-seed-key': req.headers['x-platform-seed-key'],
-      },
-      body: JSON.stringify(req.body),
-    });
-
-    const data = await response.json();
-    res.status(response.status).json(data);
-  } catch (err) {
-    console.error('[TENANT PROXY] Errore:', err.message);
-    res.status(500).json({
-      message: 'Errore di comunicazione con il server interno',
-      error: err.message,
-    });
-  }
-});
-
-
-
-
-/* =====================================================
-  API PROTETTE – /api/v1/** --> GUARDA IN FONDO
-===================================================== */
-// Tutte le rotte API protette passano da qui
-// Questo perché il proxy deve applicare la guardia RBAC prima di inoltrare la richiesta al server interno
-// Inoltre faccio passare tutte le richieste API per il proxy manuale (manualProxy) per avere un controllo completo sugli header e sul flusso di richiesta/risposta
-
-// API per users
-proxyApp.use("/api/v1/users", requireAuth, rbacGuard, manualProxy);
-
-// API per dashboard
-proxyApp.use("/api/v1/dashboard", requireAuth, rbacGuard, manualProxy);
-
-// API per requests
-proxyApp.use("/api/v1/requests", requireAuth, rbacGuard, manualProxy);
-
-// API per notifications
-proxyApp.use("/api/v1/notifications", requireAuth, rbacGuard, manualProxy);
-
-// API per buildings
-proxyApp.use("/api/v1/buildings", requireAuth, rbacGuard, manualProxy);
-
-// API per events
-proxyApp.use("/api/v1/events", requireAuth, rbacGuard, manualProxy);
-
-// API per interventions
-proxyApp.use("/api/v1/interventions", requireAuth, rbacGuard, manualProxy);
-
-// API per calendar
-proxyApp.use("/api/v1/calendar", requireAuth, rbacGuard, manualProxy);
-
-
-
-// Route di test
+/* =========================
+   Health
+========================= */
 proxyApp.get("/health", (req, res) => {
-  res.json({ 
+  res.json({
     status: "Proxy server is running",
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    internal: `${INTERNAL_HOST}:${INTERNAL_PORT}`,
   });
 });
 
-// Gestione errori 404
+/* =========================
+   404 + error handling
+========================= */
 proxyApp.use((req, res) => {
-  console.log("[PROXY 404] Route non trovata:", req.method, req.originalUrl);
-  res.status(404).json({ 
+  console.log("[PROXY 404]", req.method, req.originalUrl);
+  res.status(404).json({
     message: "Route non trovata nel proxy",
-    path: req.originalUrl
+    path: req.originalUrl,
   });
 });
 
-// Error handling middleware
 proxyApp.use((err, req, res, next) => {
-  console.error("[PROXY ERROR]", err);
-  res.status(500).json({ 
+  console.error("[PROXY ERROR HANDLER]", err);
+  res.status(500).json({
     message: "Errore interno del proxy",
-    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    error: process.env.NODE_ENV === "development" ? err.message : undefined,
   });
 });
 

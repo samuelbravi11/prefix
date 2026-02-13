@@ -1,13 +1,20 @@
+import mongoose from "mongoose";
 import { getTenantModels } from "../utils/tenantModels.js";
 
-/*
-  Restituisce tutti i buildings a cui un utente è associato.
-  L’utente deve essere già autenticato (id affidabile).
- */
-export const getBuildingsByUser = async (ctx, user) => {
-  const { Building } = ctx.models;
-  if (!user?._id) throw new Error("Invalid user");
-  if (!user.buildingIds?.length) return [];
-  return Building.find({ _id: { $in: user.buildingIds } }).lean();
-};
+export const getBuildingsByUser = async (req, user) => {
+  const { Building } = getTenantModels(req); // non serve await
 
+  if (!user?._id) throw new Error("Invalid user");
+
+  const idsRaw = Array.isArray(user.buildingIds) ? user.buildingIds : [];
+  if (idsRaw.length === 0) return [];
+
+  // evita cast error se ti arriva roba non ObjectId
+  const ids = idsRaw
+    .map(String)
+    .filter((id) => mongoose.isValidObjectId(id));
+
+  if (ids.length === 0) return [];
+
+  return Building.find({ _id: { $in: ids } }).lean();
+};

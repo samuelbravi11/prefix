@@ -26,8 +26,8 @@ export function generateTotpSecret({ email, issuer }) {
  * NB: salviamo a riposo cifrato, non in chiaro.
  */
 export function applyTotpSecretToUser(userDoc, secretBase32) {
-  const keyB64 = process.env.TOTP_ENC_KEY_B64;
-  if (!keyB64) throw new Error("Missing TOTP_ENC_KEY_B64");
+  const keyB64 = process.env.TOTP_ENC_KEY;
+  if (!keyB64) throw new Error("Missing TOTP_ENC_KEY");
 
   userDoc.totpSecretEnc = aesGcmEncrypt(secretBase32, keyB64);
   userDoc.totpEnabled = false; // verrà true solo dopo verify
@@ -74,8 +74,8 @@ export function verifyTotpSetupToken(userDoc, setupTokenPlain) {
 export function verifyTotpCode(userDoc, code) {
   if (!userDoc.totpSecretEnc) return false;
 
-  const keyB64 = process.env.TOTP_ENC_KEY_B64;
-  if (!keyB64) throw new Error("Missing TOTP_ENC_KEY_B64");
+  const keyB64 = process.env.TOTP_ENC_KEY;
+  if (!keyB64) throw new Error("Missing TOTP_ENC_KEY");
 
   const secretBase32 = aesGcmDecrypt(userDoc.totpSecretEnc, keyB64);
 

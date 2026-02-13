@@ -1,8 +1,14 @@
+import { sha256 as sha256js } from "js-sha256";
+
 async function sha256(str) {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
-  return [...new Uint8Array(buf)]
-    .map(x => x.toString(16).padStart(2, "0"))
-    .join("");
+  // WebCrypto (solo secure context)
+  if (globalThis.crypto?.subtle?.digest) {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+    return [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2, "0")).join("");
+  }
+
+  // Fallback (funziona anche su http)
+  return sha256js(str);
 }
 
 

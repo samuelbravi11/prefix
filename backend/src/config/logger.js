@@ -25,7 +25,7 @@ const logger = createLogger({
 });
 
 // In produzione, aggiungi anche console per debug via PaaS
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.NODE_ENV !== 'development') {
   logger.add(new transports.Console({
     format: format.simple(),
   }));

@@ -13,6 +13,7 @@ import { seedTenantMinimum } from "../seed/seedTenantMinimum.js";
 
 export async function bootstrapStart(req, res) {
   try {
+    console.log("[BOOTSTRAP] start", { body: req.body, tenant: req.tenant });
     const { token, name, surname, password, fingerprintHash } = req.body;
     if (!token || !name || !password || !fingerprintHash) {
       return res.status(400).json({
@@ -71,7 +72,16 @@ export async function bootstrapStart(req, res) {
     const otp = generateEmailOtp();
     const { expiresAt } = applyEmailOtpToUser(user, otp);
     await user.save();
+    if (process.env.NODE_ENV !== "development") {
+      console.log("[DEV OTP][BOOTSTRAP]", {
+        email: user.email,
+        otp,
+        expiresAt: expiresAt.toISOString(),
+      });
+    }
+    // console.log("[BOOTSTRAP] about to sendEmailOtp", { to: user.email });
     await sendEmailOtp({ to: user.email, otpCode: otp, expiresAt });
+    console.log("[BOOTSTRAP] sendEmailOtp DONE");
 
     await Tenant.updateOne({ tenantId: tenant.tenantId }, { $set: { status: "active" } });
 

@@ -23,11 +23,11 @@ export default async function tenantContext(req, res, next) {
     if (!baseDomain) throw new Error("Missing BASE_DOMAIN env");
 
     const host = normalizeHost(req.headers["x-forwarded-host"] || req.headers.host);
-    let slug = extractTenantSlug(host, baseDomain); // ✅ usiamo let
+    let slug = extractTenantSlug(host, baseDomain);
 
     // 🔧 FALLBACK PER SVILUPPO
-    if (!slug && process.env.NODE_ENV !== 'production') {
-      slug = process.env.DEFAULT_DEV_TENANT_SLUG || 'demo';
+    if (!slug && process.env.NODE_ENV === 'development') {
+      slug = process.env.DEFAULT_DEV_TENANT_SLUG || 'test12';
       console.warn(`[DEV] No tenant subdomain, using default slug: ${slug}`);
     }
 

@@ -28,12 +28,14 @@ import {
   generateRefreshToken,
   verifyAccessToken,
   verifyRefreshToken,
+  generateLoginChallengeToken,
+  verifyLoginChallengeToken,
 } from "../services/token.service.js";
 
 function setRefreshTokenCookie(res, refreshToken) {
   res.cookie("refreshToken", refreshToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.NODE_ENV !== "development",
     sameSite: "lax",
     path: "/",
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 giorni
@@ -104,6 +106,14 @@ export async function register(req, res) {
     const { expiresAt } = applyEmailOtpToUser(user, otp);
 
     await user.save();
+
+    if (process.env.NODE_ENV !== "development") {
+      console.log("[DEV OTP][REGISTER]", {
+        email: user.email,
+        otp,
+        expiresAt: expiresAt.toISOString(),
+      });
+    }
 
     await sendEmailOtp({ to: user.email, otpCode: otp, expiresAt });
 
@@ -208,7 +218,7 @@ export async function totpSetup(req, res) {
 
     const qrCodeDataUrl = await buildQrCodeDataUrl(secret.otpauth_url);
 
-    const isProd = process.env.NODE_ENV === "production";
+    const isProd = process.env.NODE_ENV === "development";
 
     return res.json({
       message: "TOTP secret generated. Scan QR and verify with your app.",
@@ -318,32 +328,27 @@ export async function totpVerify(req, res) {
 }
 
 /* ---------------------------------------------------
-   LOGIN
+   LOGIN STEP A — /auth/login/start
 --------------------------------------------------- */
-export async function login(req, res) {
+export async function loginStart(req, res) {
   try {
     if (!req.tenant) return res.status(400).json({ message: "Missing tenant" });
 
-    const { email, password, fingerprintHash } = req.body;
-    if (!email || !password || !fingerprintHash) {
+    const { email, password } = req.body;
+    if (!email || !password) {
       return res.status(400).json({
         message: "Missing fields",
-        required: ["email", "password", "fingerprintHash"],
+        required: ["email", "password"],
       });
-    }
-
-    // validazione lunghezza fingerprint
-    if (fingerprintHash.length > 128) {
-      return res.status(400).json({ message: "fingerprintHash troppo lungo" });
     }
 
     const { User } = await getTenantModels(req);
     const normalizedEmail = String(email).toLowerCase().trim();
 
+    // riuso la tua verifyLogin (controlla bcrypt)
     const user = await userService.verifyLogin(User, normalizedEmail, password);
     if (!user) return res.status(401).json({ message: "Credenziali errate" });
 
-    // cross-tenant protection (ridondante ma ok)
     if (!assertUserTenantMatch(req, user)) {
       return res.status(403).json({ message: "Tenant mismatch" });
     }
@@ -352,13 +357,97 @@ export async function login(req, res) {
       return res.status(403).json({ message: "Account non attivo. Contatta un amministratore." });
     }
 
+    if (user.totpEnabled !== true) {
+      return res.status(403).json({
+        message: "TOTP non abilitato per questo account. Completa l'onboarding.",
+      });
+    }
+
+    // Challenge token brevissimo con type dedicato
+    const challengeToken = await generateLoginChallengeToken({
+      userId: user._id.toString(),
+      tenantId: req.tenant.tenantId,
+      type: "login_challenge",
+    });
+
+    return res.json({
+      message: "Credenziali ok. Inserisci il codice TOTP.",
+      challengeToken,
+      next: "/auth/login/verify-totp",
+    });
+  } catch (err) {
+    return res.status(500).json({
+      message: "Errore server login/start",
+      error: err.message,
+    });
+  }
+}
+
+/* ---------------------------------------------------
+   LOGIN STEP B — /auth/login/verify-totp
+--------------------------------------------------- */
+export async function loginVerifyTotp(req, res) {
+  try {
+    if (!req.tenant) return res.status(400).json({ message: "Missing tenant" });
+
+    const authHeader = req.headers.authorization || "";
+    if (!authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ message: "Missing Authorization Bearer challengeToken" });
+    }
+
+    const challengeToken = authHeader.split(" ")[1];
+
+    let challengePayload;
+    try {
+      challengePayload = await verifyLoginChallengeToken(challengeToken);
+    } catch (e) {
+      return res.status(401).json({ message: e.message });
+    }
+
+    // check tenant inside token (extra hardening)
+    if (String(challengePayload.tenantId) !== String(req.tenant.tenantId)) {
+      return res.status(403).json({ message: "Tenant mismatch" });
+    }
+
+    const { code, fingerprintHash } = req.body;
+    if (!code || !fingerprintHash) {
+      return res.status(400).json({
+        message: "Missing fields",
+        required: ["code", "fingerprintHash"],
+      });
+    }
+
+    if (fingerprintHash.length > 128) {
+      return res.status(400).json({ message: "fingerprintHash troppo lungo" });
+    }
+
+    const { User } = await getTenantModels(req);
+    const user = await User.findById(challengePayload.userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (!assertUserTenantMatch(req, user)) {
+      return res.status(403).json({ message: "Tenant mismatch" });
+    }
+
+    if (user.status !== "active") {
+      return res.status(403).json({ message: "Account non attivo" });
+    }
+
+    if (user.totpEnabled !== true) {
+      return res.status(403).json({ message: "TOTP non abilitato" });
+    }
+
+    if (!verifyTotpCode(user, code)) {
+      return res.status(400).json({ message: "Invalid TOTP code" });
+    }
+
+    // OK: genera tokens come facevi prima
     const payload = { userId: user._id.toString(), status: user.status };
 
     const accessToken = await generateAccessToken(payload);
     const refreshToken = await generateRefreshToken(payload);
 
     await userService.addRefreshToken(User, user._id, refreshToken, fingerprintHash);
-
     setRefreshTokenCookie(res, refreshToken);
 
     return res.json({
@@ -367,9 +456,13 @@ export async function login(req, res) {
       user: { id: user._id, email: user.email },
     });
   } catch (err) {
-    return res.status(500).json({ message: "Errore server login", error: err.message });
+    return res.status(500).json({
+      message: "Errore server login/verify-totp",
+      error: err.message,
+    });
   }
 }
+
 
 /* ---------------------------------------------------
    REFRESH TOKEN
@@ -456,7 +549,7 @@ export async function logout(req, res) {
     res.clearCookie("refreshToken", {
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      secure: process.env.NODE_ENV !== "development",
       path: "/",
     });
 
@@ -493,7 +586,7 @@ export async function logout(req, res) {
     res.clearCookie("refreshToken", {
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      secure: process.env.NODE_ENV !== "development",
       path: "/",
     });
 
