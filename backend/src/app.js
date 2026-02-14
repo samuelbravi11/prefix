@@ -24,11 +24,13 @@ import tenantContext from "./middleware/tenantContext.middleware.js";
 const app = express();
 
 // CORS 
+/* --- IGNORE ---
 app.use(cors({
-  origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+  origin: ["http://localhost:5173", "http://127.0.0.1:5173", "http://lvh.me:5173", "http://test12.lvh.me:5173"],
   credentials: true,
   exposedHeaders: ['set-cookie'] // Permetti al frontend di vedere i cookie
 }));
+*/
 
 //DEBUG MIDDLEWARE
 app.use((req, res, next) => {
@@ -39,6 +41,12 @@ app.use((req, res, next) => {
   console.log("Base URL:", req.baseUrl);
   console.log("Headers x-internal-proxy:", req.headers['x-internal-proxy']);
   console.log("Authorization header:", req.headers.authorization ? "PRESENTE" : "ASSENTE");
+  console.log("Host:", req.headers.host);
+  console.log("X-Forwarded-Host:", req.headers["x-forwarded-host"]);
+  console.log("X-Forwarded-Proto:", req.headers["x-forwarded-proto"]);
+  console.log("Content-Type:", req.headers["content-type"]);
+  console.log("Body:", req.body);
+  console.log("Tenant:", req.tenant);
   console.log("=== END INTERNAL SERVER REQUEST ===\n");
   next();
 });

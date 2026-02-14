@@ -252,7 +252,7 @@ const fetchNotifications = async () => {
   loading.value = true
   try {
     const token = localStorage.getItem('accessToken')
-    const response = await axios.get('http://localhost:5000/api/v1/notifications', {
+    const response = await axios.get('/api/v1/notifications', {
       headers: { Authorization: `Bearer ${token}` }
     })
     notifications.value = response.data
@@ -268,7 +268,7 @@ const markAsRead = async (id) => {
   markingAsReadId.value = id
   try {
     const token = localStorage.getItem('accessToken')
-    await axios.patch(`http://localhost:5000/api/v1/notifications/${id}/read`, {}, {
+    await axios.patch(`/api/v1/notifications/${id}/read`, {}, {
       headers: { Authorization: `Bearer ${token}` }
     })
     const index = notifications.value.findIndex(n => n._id === id)
@@ -285,7 +285,7 @@ const markAsRead = async (id) => {
 const markAllAsRead = async () => {
   try {
     const token = localStorage.getItem('accessToken')
-    await axios.patch('http://localhost:5000/api/v1/notifications/read-all', {}, {
+    await axios.patch('/api/v1/notifications/read-all', {}, {
       headers: { Authorization: `Bearer ${token}` }
     })
     notifications.value.forEach(n => { n.read = true })

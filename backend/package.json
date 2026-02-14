@@ -25,6 +25,8 @@
   },
   "dependencies": {
     "@fingerprintjs/fingerprintjs-pro": "^3.12.4",
+    "@logtail/node": "^0.5.6",
+    "@logtail/winston": "^0.5.6",
     "@otplib/preset-default": "^12.0.1",
     "accepts": "^2.0.0",
     "bcrypt": "^6.0.0",
@@ -38,7 +40,7 @@
     "cookie": "^0.7.2",
     "cookie-parser": "^1.4.7",
     "cookie-signature": "^1.2.2",
-    "cors": "^2.8.5",
+    "cors": "^2.8.6",
     "debug": "^4.4.3",
     "depd": "^2.0.0",
     "dotenv": "^17.2.3",
@@ -106,11 +108,9 @@
     "type-is": "^2.0.1",
     "unpipe": "^1.0.0",
     "vary": "^1.1.2",
-    "wrappy": "^1.0.2",
-    "yamljs": "^0.3.0",
-    "@logtail/node": "^0.5.6",
-    "@logtail/winston": "^0.5.6",
     "winston": "^3.19.0",
-    "winston-daily-rotate-file": "^5.0.0"
+    "winston-daily-rotate-file": "^5.0.0",
+    "wrappy": "^1.0.2",
+    "yamljs": "^0.3.0"
   }
 }

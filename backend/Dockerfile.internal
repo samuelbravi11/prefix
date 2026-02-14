@@ -1,0 +1,24 @@
+# Stessa base, ma avvia il server interno
+FROM node:20-slim AS builder
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+FROM node:20-slim
+
+WORKDIR /app
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY . .
+
+# Cambia proprietario all'utente node
+RUN chown -R node:node /app
+
+USER node
+
+# Il server interno ascolta su 4000
+EXPOSE 4000
+
+CMD ["node", "src/server.js"]

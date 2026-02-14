@@ -16,10 +16,11 @@ async function startServer() {
     await initMongo();
 
     // Avvio server SOLO dopo DB
-    const PORT = 4000;
+    const PORT = Number(process.env.PORT || 4000);
+    const HOST = "0.0.0.0";
 
-    app.listen(PORT, "127.0.0.1", () => {
-      console.log(`Server interno attivo su 127.0.0.1:${PORT}`);
+    app.listen(PORT, HOST, () => {
+      console.log(`Server interno attivo su ${HOST}:${PORT}`);
       // Avvio lo scheduler solo una volta --> vive dentro il server interno decisionale
       startScheduler();
     });

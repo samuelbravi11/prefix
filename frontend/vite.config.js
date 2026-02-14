@@ -20,8 +20,10 @@ export default defineConfig({
   server: {
     port: 5173,
 
+    strictPort: true,
+
     // se usi subdomain su lvh.me, Vite può bloccare host non espliciti
-    allowedHosts: ["localhost", "lvh.me", "test12.lvh.me"],
+    allowedHosts: ["localhost", "lvh.me", "test12.lvh.me", "test.lvh.me", "*.lvh.me"],
 
     proxy: {
       // AUTH (pubbliche)

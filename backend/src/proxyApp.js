@@ -14,24 +14,32 @@ import { setupSwagger } from "./swagger/setupSwagger.js";
 const INTERNAL_HOST = process.env.INTERNAL_HOST || "127.0.0.1";
 const INTERNAL_PORT = Number(process.env.INTERNAL_PORT || 4000);
 
-const DEV_ALLOWED_ORIGINS = [
+const DEV_ALLOWED_ORIGINS = new Set([
+  // Vite dev server
   "http://localhost:5173",
   "http://127.0.0.1:5173",
-  // consenti *.lvh.me:5173 (wildcard) tramite funzione sotto
-];
+  "http://test12.lvh.me:5173",
+
+  // Nginx / produzione locale (porta 80)
+  "http://localhost",
+  "http://127.0.0.1",
+  "http://test12.lvh.me",
+]);
 
 function isAllowedOrigin(origin) {
-  if (!origin) return true; // tools / curl / same-origin
-  if (DEV_ALLOWED_ORIGINS.includes(origin)) return true;
+  if (!origin) return true; // tools / same-origin / alcuni client
 
-  // allow http://<sub>.lvh.me:5173
+  if (DEV_ALLOWED_ORIGINS.has(origin)) return true;
+
+  // allow http://<sub>.lvh.me con porta 5173 o senza porta (80)
   try {
     const u = new URL(origin);
-    return (
-      u.protocol === "http:" &&
-      u.hostname.endsWith(".lvh.me") &&
-      u.port === "5173"
-    );
+
+    if (u.protocol !== "http:") return false;
+    if (!u.hostname.endsWith(".lvh.me")) return false;
+
+    // u.port è "" quando è la porta di default (80)
+    return u.port === "" || u.port === "5173";
   } catch {
     return false;
   }
@@ -85,6 +93,20 @@ function forwardToInternal({ includeUserId = false } = {}) {
     const bodyPresent = hasJsonBody(req);
     const bodyString = bodyPresent ? JSON.stringify(req.body) : "";
 
+    console.log("[PROXY] IN", {
+      method: req.method,
+      url: req.originalUrl,
+      origin: req.headers.origin,
+      host: req.headers.host,
+      xfHost: req.headers["x-forwarded-host"],
+      xfProto: req.headers["x-forwarded-proto"],
+      forwardedHost,
+      forwardedProto,
+      contentType: req.headers["content-type"],
+      bodyPresent,
+      bodyKeys: req.body ? Object.keys(req.body) : null,
+    });
+
     // whitelist headers sensati
     const base = pickHeaders(req.headers, [
       "accept",
@@ -123,13 +145,18 @@ function forwardToInternal({ includeUserId = false } = {}) {
     const options = {
       hostname: INTERNAL_HOST,
       port: INTERNAL_PORT,
-      path: req.originalUrl, // <-- fondamentale
+      path: req.originalUrl, // fondamentale
       method: req.method,
       headers,
     };
 
     const proxyReq = http.request(options, (proxyRes) => {
-      // --- Response headers ---
+      console.log("[PROXY] OUT", {
+        method: req.method,
+        url: req.originalUrl,
+        status: proxyRes.statusCode,
+      });
+
       const responseHeaders = { ...proxyRes.headers };
 
       // CORS: usa l’origin reale (se consentito)
@@ -146,12 +173,19 @@ function forwardToInternal({ includeUserId = false } = {}) {
     });
 
     proxyReq.on("error", (err) => {
-      console.error("[PROXY ERROR]", err);
-      if (!res.headersSent) {
-        res.status(500).json({ message: "Proxy error", error: err.message });
-      } else {
-        res.end();
-      }
+      console.error("[PROXY ERROR]", {
+        method: req.method,
+        url: req.originalUrl,
+        message: err.message,
+        code: err.code,
+        errno: err.errno,
+        syscall: err.syscall,
+        address: err.address,
+        port: err.port,
+      });
+
+      if (!res.headersSent) res.status(502).json({ message: "Bad gateway", error: err.message });
+      else res.end();
     });
 
     if (bodyPresent) proxyReq.write(bodyString);

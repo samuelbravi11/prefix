@@ -92,7 +92,7 @@ import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth.store";
 import { useSelectedBuildingsStore } from "@/stores/selectedBuildings";
 import { loginVerifyTotp } from "@/api/authService.js";
-import axios from "axios";
+import api from "@/services/api";
 import bgImage from "../assets/images/login_image.jpg";
 
 const router = useRouter();
@@ -111,13 +111,7 @@ onMounted(() => {
 
 async function fetchAllBuildings() {
   try {
-    const token = localStorage.getItem("accessToken");
-    const response = await axios.get("/api/v1/buildings", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      }
-    });
+    const response = await api.get("/buildings");
     return response.data;
   } catch (error) {
     console.error("Errore nel caricamento degli edifici:", error);

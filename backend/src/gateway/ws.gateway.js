@@ -50,14 +50,30 @@ function isAllowedWsOrigin(origin) {
 
 export function initWebSocket(server) {
   io = new Server(server, {
+    path: "/socket.io",
     cors: {
       origin: (origin, cb) => {
         if (isAllowedWsOrigin(origin)) return cb(null, true);
         return cb(new Error("Not allowed by CORS"));
       },
-      credentials: true, // ok anche se usi JWT; serve per cors preflight/handshake in certi casi
+      methods: ["GET", "POST"],
+      credentials: true,
     },
+    transports: ["polling", "websocket"],
   });
+
+  /* ============================
+     LOG ERRORI ENGINE.IO (LOW LEVEL)
+     QUESTO VA SUBITO DOPO new Server(...)
+  ============================ */
+  io.engine.on("connection_error", (err) => {
+    console.log("[engine.io] connection_error", {
+      code: err.code,
+      message: err.message,
+      context: err.context,
+    });
+  });
+
 
   /* ============================
      AUTH MIDDLEWARE (WS)
@@ -69,36 +85,83 @@ export function initWebSocket(server) {
   // Per fare questo dobbiamo aprire la socket solo DOPO l'autenticazione da parte del client che si salverà l'access token su localStorage e lo invierà qui
   // TODO: gestire access token su httpOnly cookie per evitare attacchi XSS (injection codice javascript nel browser per leggere localStorage)
   io.use((socket, next) => {
-    const token = socket.handshake.auth?.token;
-    if (!token) return next(new Error("Unauthorized: missing token"));
+    const origin = socket.handshake.headers?.origin;
+
+    // token può arrivare in modi diversi a seconda del client / proxy
+    const tokenFromAuth  = socket.handshake.auth?.token;
+    const tokenFromQuery = socket.handshake.query?.token;
+    const tokenFromHeader =
+      socket.handshake.headers?.authorization?.startsWith("Bearer ")
+        ? socket.handshake.headers.authorization.slice("Bearer ".length)
+        : socket.handshake.headers?.authorization;
+
+    const token = tokenFromAuth || tokenFromQuery || tokenFromHeader;
+
+    console.log("[ws] handshake", {
+      origin,
+      hasAuthToken: !!tokenFromAuth,
+      hasQueryToken: !!tokenFromQuery,
+      hasHeaderAuth: !!socket.handshake.headers?.authorization,
+      host: socket.handshake.headers?.host,
+    });
+
+    if (!token) {
+      console.log("[ws] rejected: missing token");
+      return next(new Error("Unauthorized: missing token"));
+    }
 
     try {
       const payload = jwt.verify(token, process.env.JWT_SECRET);
-      socket.user = payload; // deve contenere userId, ruolo, buildings?
+      socket.user = payload;
+      console.log("[ws] authenticated user:", payload.userId || payload.id);
       next();
-    } catch {
+    } catch (err) {
+      console.log("[ws] rejected: invalid token", err.message);
       return next(new Error("Unauthorized: invalid token"));
     }
   });
 
 
+
   /* ============================
-  CONNECTION HANDLER
+     CONNECTION HANDLER
   ============================ */
-  // viene chiamato ogni volta che un browser si connette (vedi file frontend/src/services/socket.service.js)
-  // ti dà un oggetto socket che rappresenta quel client
   io.on("connection", (socket) => {
-    // L'utente si iscrive alle stanze che gli competono
+
+    console.log("[ws] CONNECTED", {
+      userId: socket.user?.userId || socket.user?.id,
+      socketId: socket.id,
+    });
+
     socket.on("join", ({ userId, role, buildingIds }) => {
+
+      console.log("[ws] join request", { userId, role, buildingIds });
+
       if (!userId) return;
-      if (String(socket.user.userId || socket.user.id) !== String(userId)) return;
+
+      if (String(socket.user.userId || socket.user.id) !== String(userId)) {
+        console.log("[ws] join rejected: user mismatch");
+        return;
+      }
 
       socket.join(`user:${userId}`);
+
       if (role) socket.join(`role:${role}`);
+
       if (Array.isArray(buildingIds)) {
         buildingIds.forEach((bid) => socket.join(`building:${bid}`));
       }
+
+      console.log("[ws] joined rooms", socket.rooms);
     });
+
+    socket.on("disconnect", (reason) => {
+      console.log("[ws] DISCONNECTED", {
+        socketId: socket.id,
+        reason,
+      });
+    });
+
   });
 }
 

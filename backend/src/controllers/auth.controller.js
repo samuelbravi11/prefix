@@ -33,12 +33,14 @@ import {
 } from "../services/token.service.js";
 
 function setRefreshTokenCookie(res, refreshToken) {
+  const isProd = process.env.NODE_ENV === "production";
+
   res.cookie("refreshToken", refreshToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV !== "development",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 giorni
+    secure: isProd,          // in dev false (http)
+    sameSite: "lax",         // ok per same-origin
+    path: "/auth",
+    maxAge: 30 * 24 * 60 * 60 * 1000,
   });
 }
 
@@ -332,6 +334,9 @@ export async function totpVerify(req, res) {
 --------------------------------------------------- */
 export async function loginStart(req, res) {
   try {
+    console.log("[LOGIN_START] body", req.body);
+    console.log("[LOGIN_START] tenant", req.tenant);
+
     if (!req.tenant) return res.status(400).json({ message: "Missing tenant" });
 
     const { email, password } = req.body;

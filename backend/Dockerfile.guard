@@ -1,0 +1,33 @@
+# Usa immagine Node ufficiale (versione 20 slim)
+FROM node:20-slim AS builder
+
+WORKDIR /app
+
+# Copia i file di dipendenze
+COPY package*.json ./
+
+# Installa tutte le dipendenze (produzione)
+RUN npm ci
+
+# Stage finale
+FROM node:20-slim
+
+WORKDIR /app
+
+# Copia node_modules dallo stage builder
+COPY --from=builder /app/node_modules ./node_modules
+
+# Copia tutto il codice del backend
+COPY . .
+
+# Cambia proprietario dei file all'utente node (già esistente)
+RUN chown -R node:node /app
+
+# Passa all'utente node (non-root)
+USER node
+
+# Espone la porta del proxy (5000)
+EXPOSE 5000
+
+# Avvia il proxy server
+CMD ["node", "src/proxyServer.js"]

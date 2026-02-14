@@ -1,0 +1,71 @@
+version: '3.8'
+
+networks:
+  public_net:
+    driver: bridge
+  private_net:
+    driver: bridge
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: nginx_proxy
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+    networks:
+      - public_net
+      - private_net
+    depends_on:
+      - proxy-guard
+    restart: unless-stopped
+
+  proxy-guard:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.guard
+    container_name: proxy_guard
+    env_file:
+      - ./backend/.env
+    environment:
+      - NODE_ENV=production
+      - INTERNAL_HOST=server-interno
+      - INTERNAL_PORT=4000
+      - INTERNAL_API_URL=http://server-interno:4000
+    networks:
+      - private_net
+    restart: unless-stopped
+
+  server-interno:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.internal
+    container_name: server_interno
+    env_file:
+      - ./backend/.env
+    environment:
+      - NODE_ENV=development
+      - PYTHON_SERVICE_URL=http://ai-service:8000
+      # MONGODB_URI verrà preso dal file .env (remoto o locale)
+    networks:
+      - private_net
+    depends_on:
+      - ai-service
+    restart: unless-stopped
+    dns:
+    - 8.8.8.8
+    - 8.8.4.4
+
+  ai-service:
+    build: ./ai-service
+    container_name: ai_service
+    env_file:
+      - ./ai-service/.env
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - private_net
+    restart: unless-stopped
