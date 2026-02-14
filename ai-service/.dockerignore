@@ -1,0 +1,16 @@
+# Escludi file sensibili
+.env
+.env.*
+!.env.example
+
+# Cache Python
+__pycache__
+*.pyc
+
+# Ambienti virtuali (se presenti)
+.venv
+venv
+ENV
+
+# Logs
+*.log

@@ -1,0 +1,15 @@
+# Escludi file sensibili
+.env
+.env.*
+!.env.example
+
+# Escludi node_modules (verranno installati in fase di build)
+node_modules
+
+# Logs
+logs
+*.log
+
+# File di sistema
+.DS_Store
+Thumbs.db
