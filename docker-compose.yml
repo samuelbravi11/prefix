@@ -27,7 +27,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.guard
-    container_name: proxy_guard
+    # container_name: proxy_guard
     env_file:
       - ./backend/.env
     environment:
