@@ -133,7 +133,8 @@ export async function register(req, res) {
       return res.status(409).json({ message: "Utente già registrato" });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const rounds = Number(process.env.BCRYPT_SALT_ROUNDS || 12);
+    const passwordHash = await bcrypt.hash(password, rounds);
 
     const user = new User({
       tenantId: req.tenant.tenantId,
@@ -161,7 +162,7 @@ export async function register(req, res) {
 
     await user.save();
 
-    if (process.env.NODE_ENV !== "development") {
+    if (process.env.NODE_ENV === "development") {
       console.log("[DEV OTP][REGISTER]", {
         email: user.email,
         otp,
@@ -202,7 +203,7 @@ export async function verifyEmail(req, res) {
 
     const { User } = await getTenantModels(req);
 
-    const userId = req.registration?.userId;
+    const userId = req.registrationUserId;
     const user = await User.findById(userId);
 
     if (!user) return res.status(404).json({ message: "User non trovato" });
@@ -239,7 +240,7 @@ export async function totpSetup(req, res) {
 
     const { User } = await getTenantModels(req);
 
-    const userId = req.registration?.userId;
+    const userId = req.registrationUserId;
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "User non trovato" });
 
@@ -247,18 +248,25 @@ export async function totpSetup(req, res) {
       return res.status(403).json({ message: "Tenant mismatch" });
     }
 
-    const secret = generateTotpSecret();
-    applyTotpSecretToUser(user, secret);
+    // generateTotpSecret vuole { email, issuer }
+    const issuer = process.env.TOTP_ISSUER || "PreFix";
+    const secretObj = generateTotpSecret({ email: user.email, issuer });
 
-    const setupToken = createAndApplyTotpSetupToken(user);
-    const qrDataUrl = await buildQrCodeDataUrl(user.email, secret);
+    // salva nel DB il secret base32 cifrato
+    applyTotpSecretToUser(user, secretObj.base32);
+
+    // setup token breve { token, expiresAt }
+    const { token: setupToken } = createAndApplyTotpSetupToken(user);
+
+    // buildQrCodeDataUrl vuole l'otpauth_url
+    const qrDataUrl = await buildQrCodeDataUrl(secretObj.otpauth_url);
 
     await user.save();
 
     return res.json({
       message: "TOTP secret generato",
-      qrDataUrl,
-      setupToken,
+      qrCodeDataUrl: qrDataUrl,
+      totpSetupToken: setupToken,
       next: "/auth/totp/verify",
     });
   } catch (err) {
@@ -276,17 +284,17 @@ export async function totpVerify(req, res) {
   try {
     if (!req.tenant) return res.status(400).json({ message: "Missing tenant" });
 
-    const { code, setupToken } = req.body;
-    if (!code || !setupToken) {
+    const { code, totpSetupToken } = req.body || {};
+    if (!code || !totpSetupToken) {
       return res.status(400).json({
         message: "Missing fields",
-        required: ["code", "setupToken"],
+        required: ["code", "totpSetupToken"],
       });
     }
 
     const { User } = await getTenantModels(req);
 
-    const userId = req.registration?.userId;
+    const userId = req.registrationUserId;
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "User non trovato" });
 
@@ -294,26 +302,37 @@ export async function totpVerify(req, res) {
       return res.status(403).json({ message: "Tenant mismatch" });
     }
 
-    try {
-      verifyTotpSetupToken(user, setupToken);
-    } catch (e) {
-      return res.status(401).json({ message: e.message });
+    // verifyTotpSetupToken ritorna boolean, non throw
+    const okToken = verifyTotpSetupToken(user, totpSetupToken);
+    if (!okToken) {
+      return res.status(401).json({ message: "TOTP setup token non valido o scaduto" });
     }
 
-    const ok = verifyTotpCode(user, code);
-    if (!ok) return res.status(400).json({ message: "TOTP code non valido" });
+    const okCode = verifyTotpCode(user, code);
+    if (!okCode) return res.status(400).json({ message: "TOTP code non valido" });
 
-    applyTotpSecretToUser(user, user.totpSecret);
     user.totpEnabled = true;
 
-    // onboarding completato (status -> pending)
-    user.status = "pending";
-    user.onboardingStatus = OnboardingStatus.COMPLETED;
+    // pulizia token setup (consigliato)
+    user.totpSetupTokenHash = undefined;
+    user.totpSetupTokenExpiresAt = undefined;
 
+    // se bootstrap --> active direttamente
+    // else --> pending (admin deve attivare)
+    if (user.isBootstrapAdmin === true) {
+      user.status = "active";
+    } else {
+      user.status = "pending";
+    }
+
+    user.onboardingStatus = OnboardingStatus.COMPLETED;
     await user.save();
 
     return res.json({
-      message: "TOTP verificato. Registrazione completata.",
+      message:
+        user.isBootstrapAdmin === true
+          ? "TOTP verificato. Bootstrap completato: account attivo."
+          : "TOTP verificato. Registrazione completata: account in attesa di approvazione.",
     });
   } catch (err) {
     return res.status(500).json({

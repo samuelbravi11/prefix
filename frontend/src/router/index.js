@@ -46,6 +46,11 @@ const routes = [
     meta: { public: true },
   },
   {
+    path: "/bootstrap",
+    component: () => import("@/views/Bootstrap.vue"),
+    meta: { public: true },
+  },
+  {
     path: "/register",
     component: () => import("@/views/Register.vue"),
     meta: { public: true },

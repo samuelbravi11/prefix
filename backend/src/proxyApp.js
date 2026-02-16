@@ -1,4 +1,4 @@
-// src/proxy/proxyApp.js
+// src/proxyApp.js
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -16,30 +16,24 @@ const INTERNAL_HOST = process.env.INTERNAL_HOST || "127.0.0.1";
 const INTERNAL_PORT = Number(process.env.INTERNAL_PORT || 4000);
 
 const DEV_ALLOWED_ORIGINS = new Set([
-  // Vite dev server
   "http://localhost:5173",
   "http://127.0.0.1:5173",
   "http://test12.lvh.me:5173",
-
-  // Nginx / produzione locale (porta 80)
   "http://localhost",
   "http://127.0.0.1",
   "http://test12.lvh.me",
+  "http://tenantprova.lvh.me",
 ]);
 
 function isAllowedOrigin(origin) {
-  if (!origin) return true; // tools / same-origin / alcuni client
+  if (!origin) return true;
 
   if (DEV_ALLOWED_ORIGINS.has(origin)) return true;
 
-  // allow http://<sub>.lvh.me con porta 5173 o senza porta (80)
   try {
     const u = new URL(origin);
-
     if (u.protocol !== "http:") return false;
     if (!u.hostname.endsWith(".lvh.me")) return false;
-
-    // u.port è "" quando è la porta di default (80)
     return u.port === "" || u.port === "5173";
   } catch {
     return false;
@@ -47,7 +41,6 @@ function isAllowedOrigin(origin) {
 }
 
 function getForwardedHost(req) {
-  // IMPORTANTE: strip porta (test12.lvh.me:5173 -> test12.lvh.me)
   const raw =
     req.headers["x-forwarded-host"] ||
     req.headers["x-original-host"] ||
@@ -78,14 +71,6 @@ function pickHeaders(incoming, allowList) {
   return out;
 }
 
-/**
- * Proxy low-level verso internal API.
- * - Preserva req.originalUrl (evita bug /auth prefix “consumato”)
- * - Inoltra cookie e set-cookie
- * - Aggiunge sigillo x-internal-*
- * - Forward host/proto tenant-aware (HOST SENZA PORTA)
- * - CORS response coerente con Origin reale (non hardcoded localhost)
- */
 function forwardToInternal({ includeUserId = false } = {}) {
   return (req, res) => {
     const forwardedHost = getForwardedHost(req);
@@ -108,7 +93,6 @@ function forwardToInternal({ includeUserId = false } = {}) {
       bodyKeys: req.body ? Object.keys(req.body) : null,
     });
 
-    // whitelist headers sensati
     const base = pickHeaders(req.headers, [
       "accept",
       "accept-language",
@@ -127,18 +111,14 @@ function forwardToInternal({ includeUserId = false } = {}) {
       ...base,
       ...(bodyPresent ? { "content-length": Buffer.byteLength(bodyString) } : {}),
 
-      // sigillo interno
       "x-internal-proxy": "true",
       "x-internal-secret": process.env.INTERNAL_PROXY_SECRET || "",
 
-      // multi-tenant context (HOST SENZA PORTA)
       "x-forwarded-host": forwardedHost,
       "x-forwarded-proto": forwardedProto,
 
-      // userId dal proxy (solo API protette)
       ...(includeUserId && req.user?._id ? { "x-user-id": String(req.user._id) } : {}),
 
-      // host verso internal server
       host: `${INTERNAL_HOST}:${INTERNAL_PORT}`,
       connection: "close",
     };
@@ -146,7 +126,7 @@ function forwardToInternal({ includeUserId = false } = {}) {
     const options = {
       hostname: INTERNAL_HOST,
       port: INTERNAL_PORT,
-      path: req.originalUrl, // fondamentale
+      path: req.originalUrl,
       method: req.method,
       headers,
     };
@@ -160,7 +140,6 @@ function forwardToInternal({ includeUserId = false } = {}) {
 
       const responseHeaders = { ...proxyRes.headers };
 
-      // CORS: usa l’origin reale (se consentito)
       const origin = req.headers.origin;
       if (origin && isAllowedOrigin(origin)) {
         responseHeaders["access-control-allow-origin"] = origin;
@@ -179,10 +158,6 @@ function forwardToInternal({ includeUserId = false } = {}) {
         url: req.originalUrl,
         message: err.message,
         code: err.code,
-        errno: err.errno,
-        syscall: err.syscall,
-        address: err.address,
-        port: err.port,
       });
 
       if (!res.headersSent) res.status(502).json({ message: "Bad gateway", error: err.message });
@@ -196,9 +171,6 @@ function forwardToInternal({ includeUserId = false } = {}) {
 
 const proxyApp = express();
 
-/* =========================
-   CORS + preflight
-========================= */
 proxyApp.use(
   cors({
     origin: (origin, cb) => {
@@ -209,28 +181,15 @@ proxyApp.use(
   })
 );
 
-/* =========================
-   Parsers + Logger
-========================= */
 proxyApp.use(express.json());
 proxyApp.use(cookieParser());
 proxyApp.use(requestLogger);
 
-/* =========================
-   CSRF guard (double submit)
-   - Applica il controllo su tutte le richieste state-changing.
-   - Le rotte pubbliche di onboarding/login sono esentate via allowlist nel middleware.
-========================= */
+// IMPORTANTISSIMO: csrfGuard DOPO cookieParser
 proxyApp.use(csrfGuard);
 
-/* =========================
-   Swagger (pubblico)
-========================= */
 setupSwagger(proxyApp);
 
-/* =========================
-   Internal events (solo server interno)
-========================= */
 proxyApp.post("/internal/events", (req, res) => {
   if (req.headers["x-internal-proxy"] !== "true") {
     return res.status(403).json({ message: "Forbidden" });
@@ -246,9 +205,7 @@ proxyApp.post("/internal/events", (req, res) => {
 
   const { userIds, event } = req.body || {};
   if (!Array.isArray(userIds) || !event) {
-    return res
-      .status(400)
-      .json({ message: "Invalid payload", expected: { userIds: [], event: {} } });
+    return res.status(400).json({ message: "Invalid payload" });
   }
 
   for (const uid of userIds) {
@@ -258,24 +215,10 @@ proxyApp.post("/internal/events", (req, res) => {
   return res.status(204).end();
 });
 
-/* =========================
-   PUBLIC ROUTES: /auth/**
-   (NO requireAuth, NO RBAC)
-========================= */
 proxyApp.use("/auth", forwardToInternal({ includeUserId: false }));
-
-/* =========================
-   PDP: /rbac/**
-   (usato dal proxy per decisioni)
-========================= */
 proxyApp.use("/rbac", forwardToInternal({ includeUserId: false }));
 
-/* =========================
-   TENANT CREATE: /api/v1/platform/tenants
-   (solo seed key, no JWT, no RBAC)
-========================= */
 proxyApp.post("/api/v1/platform/tenants", (req, res) => {
-  // forward seed key se presente
   const forwardedHost = getForwardedHost(req);
   const forwardedProto = getForwardedProto(req);
 
@@ -331,10 +274,6 @@ proxyApp.post("/api/v1/platform/tenants", (req, res) => {
   proxyReq.end();
 });
 
-/* =========================
-   PROTECTED APIs: /api/v1/**
-   (requireAuth + RBAC + forward)
-========================= */
 proxyApp.use("/api/v1/users", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
 proxyApp.use("/api/v1/dashboard", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
 proxyApp.use("/api/v1/requests", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
@@ -344,9 +283,6 @@ proxyApp.use("/api/v1/events", requireAuth, rbacGuard, forwardToInternal({ inclu
 proxyApp.use("/api/v1/interventions", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
 proxyApp.use("/api/v1/calendar", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
 
-/* =========================
-   Health
-========================= */
 proxyApp.get("/health", (req, res) => {
   res.json({
     status: "Proxy server is running",
@@ -355,15 +291,9 @@ proxyApp.get("/health", (req, res) => {
   });
 });
 
-/* =========================
-   404 + error handling
-========================= */
 proxyApp.use((req, res) => {
   console.log("[PROXY 404]", req.method, req.originalUrl);
-  res.status(404).json({
-    message: "Route non trovata nel proxy",
-    path: req.originalUrl,
-  });
+  res.status(404).json({ message: "Route non trovata nel proxy", path: req.originalUrl });
 });
 
 proxyApp.use((err, req, res, next) => {

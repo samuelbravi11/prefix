@@ -25,20 +25,21 @@ const DEV_ALLOWED_ORIGINS = new Set([
   "http://127.0.0.1",
   "http://localhost",
   "http://test12.lvh.me",
+  "http://tenantprova.lvh.me",
 ]);
 
 function isAllowedWsOrigin(origin) {
-  if (!origin) return true; // curl / tools / same-origin
+  if (!origin) return true;
+
   if (DEV_ALLOWED_ORIGINS.has(origin)) return true;
 
-  // allow http://<sub>.lvh.me:5173
   try {
     const u = new URL(origin);
-    return (
-      u.protocol === "http:" &&
-      u.hostname.endsWith(".lvh.me") &&
-      u.port === "5173"
-    );
+    if (u.protocol !== "http:") return false;
+    if (!u.hostname.endsWith(".lvh.me")) return false;
+
+    // porta "" = 80
+    return u.port === "" || u.port === "5173";
   } catch {
     return false;
   }

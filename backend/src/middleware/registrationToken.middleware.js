@@ -1,4 +1,4 @@
-// src/middleware/requireRegistrationToken.js
+// src/middleware/requireRegistrationToken.middleware.js
 import { verifyRegistrationToken } from "../services/registrationToken.service.js";
 
 /**
@@ -18,6 +18,11 @@ export function requireRegistrationToken(req, res, next) {
     const payload = verifyRegistrationToken(token);
 
     req.registrationUserId = String(payload.userId);
+    req.registrationTenantId = payload.tenantId ? String(payload.tenantId) : null;
+
+    if (req.tenant?.tenantId && req.registrationTenantId && req.registrationTenantId !== String(req.tenant.tenantId)) {
+      return res.status(403).json({ message: "Tenant mismatch" });
+    }
     return next();
   } catch (err) {
     return res.status(401).json({

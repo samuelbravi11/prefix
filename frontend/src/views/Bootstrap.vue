@@ -1,146 +1,171 @@
 <template>
-  <div v-if="loading" class="loading">
-    <p>Caricamento, attendere...</p>
-  </div>
-  <div v-else-if="error" class="error">
-    <p style="color: red;">❌ {{ error }}</p>
-  </div>
-  <div v-else-if="step === 'email'" class="step">
-    <h2>Verifica email</h2>
-    <p>Inserisci il codice OTP inviato a {{ email }}</p>
-    <input v-model="otpCode" placeholder="Codice a 6 cifre" />
-    <button @click="verifyEmail">Verifica</button>
-  </div>
-  <div v-else-if="step === 'totp_setup'" class="step">
-    <h2>Configura TOTP</h2>
-    <p>Scansiona il QR code con Google Authenticator</p>
-    <img :src="qrCode" alt="QR Code" style="width: 200px; height: 200px;" />
-    <button @click="confirmTotpSetup">Ho scannerizzato, continua</button>
-  </div>
-  <div v-else-if="step === 'totp_verify'" class="step">
-    <h2>Verifica TOTP</h2>
-    <p>Inserisci il codice a 6 cifre dall'app</p>
-    <input v-model="totpCode" placeholder="Codice TOTP" />
-    <button @click="verifyTotp">Verifica</button>
-  </div>
-  <div v-else-if="step === 'completed'" class="success">
-    <h2>✅ Registrazione completata!</h2>
-    <p>Il tuo account è ora attivo. Puoi effettuare il login.</p>
-    <router-link to="/login">Vai al login</router-link>
+  <div class="container" style="max-width: 520px; padding: 32px;">
+    <h2 class="mb-3">Bootstrap Admin</h2>
+
+    <div v-if="error" class="alert alert-danger">{{ error }}</div>
+
+    <div v-if="step === 'form'">
+      <p class="text-muted">
+        Completa la creazione dell’admin. Poi riceverai un OTP email e configurerai il TOTP.
+      </p>
+
+      <div class="mb-3">
+        <label class="form-label">Nome</label>
+        <input v-model="name" class="form-control" placeholder="Nome" />
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Cognome</label>
+        <input v-model="surname" class="form-control" placeholder="Cognome" />
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Password</label>
+        <input v-model="password" type="password" class="form-control" placeholder="Password" />
+      </div>
+
+      <button class="btn btn-primary w-100" :disabled="loading" @click="startBootstrap">
+        <span v-if="loading">Avvio...</span>
+        <span v-else>Avvia bootstrap</span>
+      </button>
+    </div>
+
+    <div v-else-if="step === 'email'">
+      <p>Inserisci l’OTP email ricevuto.</p>
+      <input v-model="otpCode" class="form-control mb-3" placeholder="123456" />
+      <button class="btn btn-primary w-100" :disabled="loading" @click="verifyEmail">
+        <span v-if="loading">Verifica...</span>
+        <span v-else>Verifica email</span>
+      </button>
+    </div>
+
+    <div v-else-if="step === 'totp_setup'">
+      <p>Scansiona il QR con Authenticator.</p>
+      <div class="text-center mb-3">
+        <img v-if="qrCodeDataUrl" :src="qrCodeDataUrl" style="width: 220px; height: 220px;" />
+      </div>
+      <button class="btn btn-primary w-100" :disabled="loading || !totpSetupToken" @click="step = 'totp_verify'">
+        Ho scannerizzato, continua
+      </button>
+    </div>
+
+    <div v-else-if="step === 'totp_verify'">
+      <p>Inserisci il codice TOTP.</p>
+      <input v-model="totpCode" class="form-control mb-3" placeholder="123456" />
+      <button class="btn btn-primary w-100" :disabled="loading" @click="verifyTotp">
+        <span v-if="loading">Verifica...</span>
+        <span v-else>Verifica TOTP</span>
+      </button>
+    </div>
+
+    <div v-else>
+      <div class="alert alert-success">
+        ✅ Bootstrap completato. L’admin è attivo.
+      </div>
+      <router-link to="/login" class="btn btn-primary w-100">Vai al login</router-link>
+    </div>
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup>
+import { ref, onMounted } from "vue";
+import { useRouter } from "vue-router";
+import {
+  bootstrapStart,
+  verifyEmailOtp,
+  totpSetup,
+  totpVerify,
+} from "@/api/authService.js";
 
-export default {
-  name: 'Bootstrap',
-  data() {
-    return {
-      loading: true,
-      error: null,
-      step: null,
-      registrationToken: null,
-      email: '',
-      otpCode: '',
-      totpSetupToken: '',
-      qrCode: '',
-      totpCode: '',
-    };
-  },
-  created() {
-    // Estrai token dalla query string
-    const urlParams = new URLSearchParams(window.location.search);
-    this.registrationToken = urlParams.get('token');
-    if (!this.registrationToken) {
-      this.error = 'Token di registrazione mancante';
-      this.loading = false;
-      return;
-    }
-    this.startBootstrap();
-  },
-  methods: {
-    async startBootstrap() {
-      try {
-        // Recupera i dati dell'utente in attesa (opzionale)
-        // Per ora assumiamo che il backend abbia inviato una email con OTP
-        // Passiamo direttamente allo step di verifica email
-        this.step = 'email';
-        this.loading = false;
-      } catch (err) {
-        this.error = err.message;
-        this.loading = false;
-      }
-    },
-    async verifyEmail() {
-      this.loading = true;
-      try {
-        const res = await axios.post(
-          '/auth/verify-email',
-          { code: this.otpCode },
-          {
-            headers: {
-              Authorization: `Bearer ${this.registrationToken}`,
-            },
-          }
-        );
-        // Vai allo step successivo
-        this.step = 'totp_setup';
-        await this.setupTotp();
-      } catch (err) {
-        this.error = err.response?.data?.message || err.message;
-      } finally {
-        this.loading = false;
-      }
-    },
-    async setupTotp() {
-      this.loading = true;
-      try {
-        const res = await axios.post(
-          '/auth/totp/setup',
-          {},
-          {
-            headers: {
-              Authorization: `Bearer ${this.registrationToken}`,
-            },
-          }
-        );
-        this.totpSetupToken = res.data.totpSetupToken;
-        this.qrCode = res.data.qrCodeDataUrl;
-        this.step = 'totp_verify';
-      } catch (err) {
-        this.error = err.response?.data?.message || err.message;
-      } finally {
-        this.loading = false;
-      }
-    },
-    confirmTotpSetup() {
-      // L'utente ha cliccato "Ho scannerizzato" – non c'è azione API,
-      // passiamo direttamente alla verifica.
-      this.step = 'totp_verify';
-    },
-    async verifyTotp() {
-      this.loading = true;
-      try {
-        const res = await axios.post(
-          '/auth/totp/verify',
-          {
-            totpSetupToken: this.totpSetupToken,
-            code: this.totpCode,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${this.registrationToken}`,
-            },
-          }
-        );
-        this.step = 'completed';
-      } catch (err) {
-        this.error = err.response?.data?.message || err.message;
-      } finally {
-        this.loading = false;
-      }
-    },
-  },
-};
+const router = useRouter();
+
+const loading = ref(false);
+const error = ref(null);
+
+const step = ref("form"); // form | email | totp_setup | totp_verify | done
+
+const bootstrapToken = ref(null);
+
+const name = ref("");
+const surname = ref("");
+const password = ref("");
+
+const registrationToken = ref(null);
+
+const otpCode = ref("");
+const qrCodeDataUrl = ref("");
+const totpSetupToken = ref("");
+const totpCode = ref("");
+
+onMounted(() => {
+  const urlParams = new URLSearchParams(window.location.search);
+  bootstrapToken.value = urlParams.get("token");
+  if (!bootstrapToken.value) {
+    error.value = "Token bootstrap mancante nella query string (?token=...)";
+  }
+});
+
+async function startBootstrap() {
+  if (!bootstrapToken.value) return;
+  if (!name.value || !password.value) {
+    error.value = "Nome e password sono obbligatori";
+    return;
+  }
+
+  loading.value = true;
+  error.value = null;
+
+  try {
+    const res = await bootstrapStart({
+      token: bootstrapToken.value,
+      name: name.value,
+      surname: surname.value,
+      password: password.value,
+    });
+
+    registrationToken.value = res.data.registrationToken;
+    step.value = "email";
+  } catch (err) {
+    error.value = err.response?.data?.message || err.message;
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function verifyEmail() {
+  loading.value = true;
+  error.value = null;
+  try {
+    await verifyEmailOtp({
+      registrationToken: registrationToken.value,
+      code: otpCode.value,
+    });
+
+    const setupRes = await totpSetup({ registrationToken: registrationToken.value });
+    qrCodeDataUrl.value = setupRes.data.qrCodeDataUrl;
+    totpSetupToken.value = setupRes.data.totpSetupToken;
+
+    step.value = "totp_setup";
+  } catch (err) {
+    error.value = err.response?.data?.message || err.message;
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function verifyTotp() {
+  loading.value = true;
+  error.value = null;
+  try {
+    await totpVerify({
+      registrationToken: registrationToken.value,
+      totpSetupToken: totpSetupToken.value,
+      code: totpCode.value,
+    });
+
+    step.value = "done";
+  } catch (err) {
+    error.value = err.response?.data?.message || err.message;
+  } finally {
+    loading.value = false;
+  }
+}
 </script>

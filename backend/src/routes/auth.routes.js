@@ -1,9 +1,8 @@
 import { Router } from "express";
-import authAudit from "../middleware/authAudit.middleware.js";
 import * as authController from "../controllers/auth.controller.js";
 import { requireRegistrationToken } from "../middleware/registrationToken.middleware.js";
 import { bootstrapStart } from "../controllers/bootstrap.controller.js";
-
+import authAudit from "../middleware/authAudit.middleware.js";
 
 const router = Router();
 

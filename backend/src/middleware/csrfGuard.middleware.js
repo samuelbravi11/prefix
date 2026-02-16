@@ -28,21 +28,18 @@ function isExemptPath(pathname) {
 }
 
 function getRequestOrigin(req) {
-  // In browser requests, Origin è spesso presente per PATCH/POST cross-site.
-  // In same-origin può essere assente in alcuni casi.
   return req.headers.origin || null;
 }
 
 function getExpectedOrigin(req) {
-  // Express dietro proxy/Nginx: meglio rispettare x-forwarded-proto se presente
   const proto = String(req.headers["x-forwarded-proto"] || req.protocol || "http");
-  const host = req.get("host"); // include eventualmente la porta
+  const host = req.get("host"); // include eventuale porta
   return `${proto}://${host}`;
 }
 
 function isSameOrigin(req) {
   const origin = getRequestOrigin(req);
-  if (!origin) return true; // se manca, trattiamo come same-origin (tipico di alcune richieste)
+  if (!origin) return true;
   return origin === getExpectedOrigin(req);
 }
 
@@ -54,7 +51,7 @@ export default function csrfGuard(req, res, next) {
     const cookieToken = req.cookies?.csrfToken;
     const headerToken = req.headers["x-csrf-token"];
 
-    // Se SAME-ORIGIN: basta che esista il cookie csrfToken
+    // SAME-ORIGIN: basta il cookie
     if (isSameOrigin(req)) {
       if (!cookieToken) {
         return res.status(403).json({ message: "CSRF token mancante" });
@@ -62,7 +59,7 @@ export default function csrfGuard(req, res, next) {
       return next();
     }
 
-    // Se CROSS-SITE: richiedi double-submit (cookie + header uguali)
+    // CROSS-SITE: double submit
     if (!cookieToken || !headerToken) {
       return res.status(403).json({ message: "CSRF token mancante" });
     }
@@ -72,7 +69,7 @@ export default function csrfGuard(req, res, next) {
     }
 
     return next();
-  } catch (err) {
+  } catch {
     return res.status(403).json({ message: "CSRF check failed" });
   }
 }
