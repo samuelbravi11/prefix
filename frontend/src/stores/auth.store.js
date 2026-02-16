@@ -4,74 +4,48 @@ import authApi from "@/services/authApi";
 // store globale pinia per gestione autenticazione utente, che rappresenta:
 // - i dati dell’utente loggato (user)
 // - lo stato di autenticazione (isAuthenticated)
-// - azioni per login, logout, inizializzazione da storage
 export const useAuthStore = defineStore("auth", {
   state: () => ({
     user: null,
     isAuthenticated: false,
-    loading: true,
+    loading: false,
+    initialized: false,
   }),
 
   actions: {
     async fetchMe() {
       this.loading = true;
 
-      const token = localStorage.getItem("accessToken");
-
-      if (!token) {
-        this.user = null;
-        this.isAuthenticated = false;
-        this.loading = false;
-        return;
-      }
-
       try {
-        console.log("DEBUG: Chiamando /auth/me...");
-
+        await authApi.get("/csrf"); // ottiene CSRF token (double submit cookie) necessario per chiamare /me
         const response = await authApi.get("/me");
-
-        console.log("DEBUG: Risposta:", response.data);
-
         this.user = response.data;
         this.isAuthenticated = true;
-
       } catch (err) {
-
-        console.error("fetchMe error:", err.response?.data);
-
         this.user = null;
         this.isAuthenticated = false;
-
-        localStorage.removeItem("accessToken");
-
       } finally {
-
         this.loading = false;
-
+        this.initialized = true;
       }
     },
 
     async logout() {
       try {
-
         await authApi.post("/logout", {
           fingerprintHash: localStorage.getItem("fingerprintHash"),
         });
-
       } catch (err) {
-
         console.error("logout error", err);
-
       } finally {
-
         this.user = null;
         this.isAuthenticated = false;
+        this.initialized = true;
 
-        localStorage.removeItem("accessToken");
+        // fingerprint non è un segreto, ma puliamo comunque
         localStorage.removeItem("fingerprintHash");
 
         window.location.href = "/login";
-
       }
     },
   },

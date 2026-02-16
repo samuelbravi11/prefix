@@ -1,22 +1,28 @@
 import { verifyAccessToken } from "../services/token.service.js";
 
-/* RICHIESTA TOKEN
-  La Guard controlla il token
-  - token mancante o invalido --> 401 Unauthorized
-  - token valido --> la Guard sa chi è l’utente --> il middleware continua (next()) passando alla fase di autorizzazione (verifica ruoli dell'utente)
+/*
+  requireAuth (PROXY)
+  - Preferisce il token in cookie HttpOnly: accessToken
+  - Fallback su Authorization: Bearer <token> (utile per tool / swagger / debug)
+
+  Se valido: imposta req.user = { _id }
 */
 async function requireAuth(req, res, next) {
   try {
-    console.log("\nHEADER:", req.headers.authorization);
-    const header = req.headers.authorization;
+    // 1) Prefer HttpOnly cookie
+    const cookieToken = req.cookies?.accessToken;
 
-    if (!header || !header.startsWith("Bearer ")) {
+    // 2) Fallback: Authorization Bearer
+    const header = req.headers.authorization || req.headers.Authorization || "";
+    const bearerToken = header.startsWith("Bearer ") ? header.split(" ")[1] : null;
+
+    const token = cookieToken || bearerToken;
+
+    if (!token) {
       return res.status(401).json({ message: "Token mancante" });
     }
 
-    const token = header.split(" ")[1];
-
-    // Decripta + validazione JWE
+    // Validazione JWT
     const payload = await verifyAccessToken(token);
 
     // SOLO IDENTITÀ --> niente DB, niente ruoli

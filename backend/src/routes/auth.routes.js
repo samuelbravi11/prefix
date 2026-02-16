@@ -102,4 +102,10 @@ router.get(
   authController.me
 );
 
+router.get(
+  "/csrf",
+  authController.csrf
+);
+
+
 export default router;

@@ -1,4 +1,5 @@
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 
 import { OnboardingStatus } from "../models/User.js";
 import { getTenantModels } from "../utils/tenantModels.js";
@@ -40,7 +41,58 @@ function setRefreshTokenCookie(res, refreshToken) {
     secure: isProd,          // in dev false (http)
     sameSite: "lax",         // ok per same-origin
     path: "/auth",
-    maxAge: 30 * 24 * 60 * 60 * 1000,
+    maxAge: 24 * 60 * 60 * 1000,  // 1d
+  });
+}
+
+function setAccessTokenCookie(res, accessToken) {
+  const isProd = process.env.NODE_ENV === "production";
+
+  // accessToken serve su tutte le API protette (proxy)
+  res.cookie("accessToken", accessToken, {
+    httpOnly: true,
+    secure: isProd,          // in dev false (http)
+    sameSite: "lax",
+    path: "/",
+    maxAge: 15 * 60 * 1000,  // 15m
+  });
+}
+
+function setCsrfTokenCookie(res, csrfToken) {
+  const isProd = process.env.NODE_ENV === "production";
+
+  // NON HttpOnly: il frontend deve leggerlo e rimandarlo in header X-CSRF-Token
+  res.cookie("csrfToken", csrfToken, {
+    httpOnly: false,
+    secure: isProd,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 24 * 60 * 60 * 1000,  // 1d
+  });
+}
+
+function clearAuthCookies(res) {
+  const isProd = process.env.NODE_ENV === "production";
+
+  res.clearCookie("accessToken", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: isProd,
+    path: "/",
+  });
+
+  res.clearCookie("csrfToken", {
+    httpOnly: false,
+    sameSite: "lax",
+    secure: isProd,
+    path: "/",
+  });
+
+  res.clearCookie("refreshToken", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: isProd,
+    path: "/auth",
   });
 }
 
@@ -119,211 +171,153 @@ export async function register(req, res) {
 
     await sendEmailOtp({ to: user.email, otpCode: otp, expiresAt });
 
-    const registrationToken = signRegistrationToken({ userId: user._id.toString() });
+    const registrationToken = signRegistrationToken({
+      userId: user._id.toString(),
+      tenantId: req.tenant.tenantId,
+      type: "registration",
+    });
 
     return res.status(201).json({
-      message: "Registrazione avviata. Verifica l'OTP email per continuare.",
+      message: "Registrazione avviata. Verifica email.",
       registrationToken,
-      next: "POST /auth/verify-email",
+      next: "/auth/verify-email",
     });
   } catch (err) {
     return res.status(500).json({
-      message: "Errore interno registrazione",
+      message: "Errore server register",
       error: err.message,
     });
   }
 }
 
-/**
- * POST /auth/verify-email
- */
+/* ---------------------------------------------------
+   VERIFY EMAIL OTP — /auth/verify-email
+--------------------------------------------------- */
 export async function verifyEmail(req, res) {
   try {
     if (!req.tenant) return res.status(400).json({ message: "Missing tenant" });
 
-    const userId = req.registrationUserId;
     const { code } = req.body;
-    if (!code) return res.status(400).json({ message: "Missing OTP code" });
+    if (!code) return res.status(400).json({ message: "OTP code mancante" });
 
     const { User } = await getTenantModels(req);
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: "User not found" });
 
-    // cross-tenant protection
+    const userId = req.registration?.userId;
+    const user = await User.findById(userId);
+
+    if (!user) return res.status(404).json({ message: "User non trovato" });
+
     if (!assertUserTenantMatch(req, user)) {
       return res.status(403).json({ message: "Tenant mismatch" });
     }
 
-    if (user.onboardingStatus !== OnboardingStatus.EMAIL_VERIFICATION) {
-      return res.status(409).json({
-        message: "Invalid onboarding step",
-        expected: OnboardingStatus.EMAIL_VERIFICATION,
-        current: user.onboardingStatus,
-      });
-    }
-
-    if (!verifyEmailOtp(user, code)) {
-      return res.status(400).json({ message: "Invalid or expired OTP" });
-    }
+    const ok = verifyEmailOtp(user, code);
+    if (!ok) return res.status(400).json({ message: "OTP non valido o scaduto" });
 
     user.emailVerified = true;
     user.onboardingStatus = OnboardingStatus.TOTP_SETUP;
-    user.emailOtpHash = null;
-    user.emailOtpExpiresAt = null;
-
     await user.save();
 
     return res.json({
-      message: "Email verified. Proceed with TOTP setup.",
-      next: "POST /auth/totp/setup",
+      message: "Email verificata. Procedi con TOTP setup.",
+      next: "/auth/totp/setup",
     });
   } catch (err) {
     return res.status(500).json({
-      message: "Verify email error",
+      message: "Errore server verify-email",
       error: err.message,
     });
   }
 }
 
-/**
- * POST /auth/totp/setup
- */
+/* ---------------------------------------------------
+   TOTP SETUP — /auth/totp/setup
+--------------------------------------------------- */
 export async function totpSetup(req, res) {
   try {
     if (!req.tenant) return res.status(400).json({ message: "Missing tenant" });
 
-    const userId = req.registrationUserId;
-
     const { User } = await getTenantModels(req);
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: "User not found" });
 
-    // cross-tenant protection
+    const userId = req.registration?.userId;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User non trovato" });
+
     if (!assertUserTenantMatch(req, user)) {
       return res.status(403).json({ message: "Tenant mismatch" });
     }
 
-    if (!user.emailVerified || user.onboardingStatus !== OnboardingStatus.TOTP_SETUP) {
-      return res.status(409).json({
-        message: "Invalid onboarding step",
-        expected: OnboardingStatus.TOTP_SETUP,
-        emailVerified: user.emailVerified,
-        current: user.onboardingStatus,
-      });
-    }
+    const secret = generateTotpSecret();
+    applyTotpSecretToUser(user, secret);
 
-    const secret = generateTotpSecret({ email: user.email, issuer: "PreFix" });
-    applyTotpSecretToUser(user, secret.base32);
+    const setupToken = createAndApplyTotpSetupToken(user);
+    const qrDataUrl = await buildQrCodeDataUrl(user.email, secret);
 
-    const { token: totpSetupToken, expiresAt } = createAndApplyTotpSetupToken(user);
     await user.save();
 
-    const qrCodeDataUrl = await buildQrCodeDataUrl(secret.otpauth_url);
-
-    const isProd = process.env.NODE_ENV === "development";
-
     return res.json({
-      message: "TOTP secret generated. Scan QR and verify with your app.",
-      totpSetupToken,
-      totpSetupTokenExpiresAt: expiresAt.toISOString(),
-      qrCodeDataUrl,
-      ...(isProd ? {} : { otpauthUrl: secret.otpauth_url }), // solo in sviluppo
-      next: "POST /auth/totp/verify",
+      message: "TOTP secret generato",
+      qrDataUrl,
+      setupToken,
+      next: "/auth/totp/verify",
     });
   } catch (err) {
     return res.status(500).json({
-      message: "TOTP setup error",
+      message: "Errore server totp/setup",
       error: err.message,
     });
   }
 }
 
-/**
- * POST /auth/totp/verify
- */
-/**
- * POST /auth/totp/verify
- * Body: { totpSetupToken, code }
- * Middleware: requireRegistrationToken -> req.registrationUserId
- */
+/* ---------------------------------------------------
+   TOTP VERIFY — /auth/totp/verify
+--------------------------------------------------- */
 export async function totpVerify(req, res) {
   try {
     if (!req.tenant) return res.status(400).json({ message: "Missing tenant" });
 
-    const userId = req.registrationUserId;
-    const { totpSetupToken, code } = req.body;
-
-    if (!totpSetupToken || !code) {
+    const { code, setupToken } = req.body;
+    if (!code || !setupToken) {
       return res.status(400).json({
         message: "Missing fields",
-        required: ["totpSetupToken", "code"],
+        required: ["code", "setupToken"],
       });
     }
 
-    const { User, Building } = await getTenantModels(req);
+    const { User } = await getTenantModels(req);
 
+    const userId = req.registration?.userId;
     const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) return res.status(404).json({ message: "User non trovato" });
 
-    // cross-tenant protection
     if (!assertUserTenantMatch(req, user)) {
       return res.status(403).json({ message: "Tenant mismatch" });
     }
 
-    if (!user.emailVerified || user.onboardingStatus !== OnboardingStatus.TOTP_SETUP) {
-      return res.status(409).json({
-        message: "Invalid onboarding step",
-        expected: OnboardingStatus.TOTP_SETUP,
-        current: user.onboardingStatus,
-      });
+    try {
+      verifyTotpSetupToken(user, setupToken);
+    } catch (e) {
+      return res.status(401).json({ message: e.message });
     }
 
-    if (!verifyTotpSetupToken(user, totpSetupToken)) {
-      return res.status(400).json({ message: "Invalid or expired totpSetupToken" });
-    }
+    const ok = verifyTotpCode(user, code);
+    if (!ok) return res.status(400).json({ message: "TOTP code non valido" });
 
-    if (!verifyTotpCode(user, code)) {
-      return res.status(400).json({ message: "Invalid TOTP code" });
-    }
-
-    // =========================
-    // AUTO-ASSEGNAZIONE BUILDING (se esiste solo 1)
-    // =========================
-    const hasBuildingsAlready = Array.isArray(user.buildingIds) && user.buildingIds.length > 0;
-
-    if (!hasBuildingsAlready) {
-      const buildingsCount = await Building.countDocuments();
-      if (buildingsCount === 1) {
-        const onlyBuilding = await Building.findOne().select("_id").lean();
-        if (onlyBuilding?._id) {
-          user.buildingIds = [onlyBuilding._id];
-        }
-      }
-    }
-
-    // =========================
-    // CHIUSURA ONBOARDING
-    // =========================
+    applyTotpSecretToUser(user, user.totpSecret);
     user.totpEnabled = true;
-    user.onboardingStatus = OnboardingStatus.DONE;
 
-    // bootstrap admin diventa subito active, gli altri pending
-    user.status = user.isBootstrapAdmin ? "active" : "pending";
-
-    user.totpSetupTokenHash = null;
-    user.totpSetupTokenExpiresAt = null;
+    // onboarding completato (status -> pending)
+    user.status = "pending";
+    user.onboardingStatus = OnboardingStatus.COMPLETED;
 
     await user.save();
 
     return res.json({
-      message: user.isBootstrapAdmin
-        ? "TOTP verified. Bootstrap admin activated."
-        : "TOTP verified. Registration completed. Awaiting admin approval.",
-      status: user.status,
+      message: "TOTP verificato. Registrazione completata.",
     });
   } catch (err) {
     return res.status(500).json({
-      message: "TOTP verify error",
+      message: "Errore server totp/verify",
       error: err.message,
     });
   }
@@ -334,41 +328,36 @@ export async function totpVerify(req, res) {
 --------------------------------------------------- */
 export async function loginStart(req, res) {
   try {
-    console.log("[LOGIN_START] body", req.body);
-    console.log("[LOGIN_START] tenant", req.tenant);
-
     if (!req.tenant) return res.status(400).json({ message: "Missing tenant" });
 
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
     if (!email || !password) {
-      return res.status(400).json({
-        message: "Missing fields",
-        required: ["email", "password"],
-      });
+      return res.status(400).json({ message: "Missing email/password" });
     }
 
-    const { User } = await getTenantModels(req);
     const normalizedEmail = String(email).toLowerCase().trim();
 
-    // riuso la tua verifyLogin (controlla bcrypt)
-    const user = await userService.verifyLogin(User, normalizedEmail, password);
-    if (!user) return res.status(401).json({ message: "Credenziali errate" });
+    const { User } = await getTenantModels(req);
+    const user = await userService.findByEmail(User, normalizedEmail);
+
+    if (!user) return res.status(401).json({ message: "Invalid credentials" });
 
     if (!assertUserTenantMatch(req, user)) {
       return res.status(403).json({ message: "Tenant mismatch" });
     }
 
+    const ok = await bcrypt.compare(password, user.auth?.passwordHash || "");
+    if (!ok) return res.status(401).json({ message: "Invalid credentials" });
+
     if (user.status !== "active") {
-      return res.status(403).json({ message: "Account non attivo. Contatta un amministratore." });
+      return res.status(403).json({ message: "Account non attivo" });
     }
 
     if (user.totpEnabled !== true) {
-      return res.status(403).json({
-        message: "TOTP non abilitato per questo account. Completa l'onboarding.",
-      });
+      return res.status(403).json({ message: "TOTP non abilitato" });
     }
 
-    // Challenge token brevissimo con type dedicato
+    // challenge token breve
     const challengeToken = await generateLoginChallengeToken({
       userId: user._id.toString(),
       tenantId: req.tenant.tenantId,
@@ -376,7 +365,7 @@ export async function loginStart(req, res) {
     });
 
     return res.json({
-      message: "Credenziali ok. Inserisci il codice TOTP.",
+      message: "Login step A OK. Procedi con verify-totp",
       challengeToken,
       next: "/auth/login/verify-totp",
     });
@@ -453,10 +442,18 @@ export async function loginVerifyTotp(req, res) {
     const refreshToken = await generateRefreshToken(payload);
 
     await userService.addRefreshToken(User, user._id, refreshToken, fingerprintHash);
+
+    // Cookies
     setRefreshTokenCookie(res, refreshToken);
+    setAccessTokenCookie(res, accessToken);
+
+    // CSRF token (double-submit cookie)
+    const csrfToken = crypto.randomBytes(32).toString("hex");
+    setCsrfTokenCookie(res, csrfToken);
 
     return res.json({
       message: "Login effettuato",
+      // accessToken lasciato SOLO per debug/compat, ma il frontend NON deve salvarlo
       accessToken,
       user: { id: user._id, email: user.email },
     });
@@ -467,7 +464,6 @@ export async function loginVerifyTotp(req, res) {
     });
   }
 }
-
 
 /* ---------------------------------------------------
    REFRESH TOKEN
@@ -529,41 +525,19 @@ export async function refresh(req, res) {
     });
 
     setRefreshTokenCookie(res, newRefreshToken);
-    return res.json({ accessToken: newAccessToken });
+    setAccessTokenCookie(res, newAccessToken);
+
+    // se il csrf cookie non esiste (edge-case), rigeneralo
+    if (!req.cookies?.csrfToken) {
+      const csrfToken = crypto.randomBytes(32).toString("hex");
+      setCsrfTokenCookie(res, csrfToken);
+    }
+
+    return res.json({ ok: true });
   } catch (err) {
     return res.status(500).json({ message: "Errore server refresh", error: err.message });
   }
 }
-
-
-/* ===================================================
-   LOGOUT
-=================================================== */
-/*
-export async function logout(req, res) {
-  try {
-    if (!req.tenant) return res.status(400).json({ message: "Missing tenant" });
-
-    const refreshToken = req.cookies?.refreshToken;
-    if (!refreshToken) return res.status(200).json({ message: "Already logged out" });
-
-    const { User } = await getTenantModels(req);
-
-    await userService.revokeRefreshToken(User, refreshToken); // ritorna true/false, puoi ignorarlo
-
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV !== "development",
-      path: "/",
-    });
-
-    return res.json({ message: "Logout successful" });
-  } catch (err) {
-    return res.status(500).json({ message: "Logout failed", error: err.message });
-  }
-}
-*/
 
 // LOGOUT LEGATO AL DISPOSITIVO CON FINGERPRINT --> DA CHIEDERE AL CLIENT IL FINGERPRINT
 export async function logout(req, res) {
@@ -579,7 +553,7 @@ export async function logout(req, res) {
     if (fingerprintHash && fingerprintHash.length > 128) {
       return res.status(400).json({ message: "fingerprintHash troppo lungo" });
     }
-    
+
     const { User } = await getTenantModels(req);
 
     if (fingerprintHash) {
@@ -588,19 +562,13 @@ export async function logout(req, res) {
       await userService.revokeRefreshToken(User, refreshToken);
     }
 
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV !== "development",
-      path: "/",
-    });
+    clearAuthCookies(res);
 
     return res.json({ message: "Logout successful" });
   } catch (err) {
     return res.status(500).json({ message: "Logout failed", error: err.message });
   }
 }
-
 
 /* ===================================================
    ME
@@ -609,44 +577,36 @@ export async function me(req, res) {
   try {
     if (!req.tenant) return res.status(400).json({ message: "Missing tenant" });
 
+    const cookieToken = req.cookies?.accessToken;
     const authHeader = req.headers.authorization || "";
-    if (!authHeader.startsWith("Bearer ")) {
+    const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+
+    const token = cookieToken || bearerToken;
+    if (!token) {
       return res.status(401).json({ message: "Non autenticato" });
     }
 
-    const token = authHeader.split(" ")[1];
     const payload = await verifyAccessToken(token);
 
     const { User } = await getTenantModels(req);
-    const user = await User.findById(payload.userId).select(
-      "_id tenantId name surname email roles status createdAt updatedAt"
-    );
+    const user = await User.findById(payload.userId)
+      .select("-auth.passwordHash -auth.refreshTokens")
+      .lean();
 
-    if (!user) return res.status(404).json({ message: "Utente non trovato" });
+    if (!user) return res.status(404).json({ message: "User non trovato" });
 
-    // ✅ cross-tenant protection
     if (!assertUserTenantMatch(req, user)) {
       return res.status(403).json({ message: "Tenant mismatch" });
     }
 
-    if (user.status !== "active") {
-      return res.status(403).json({ message: "Utente non attivo", status: user.status });
-    }
-
-    return res.json({
-      _id: user._id,
-      email: user.email,
-      name: user.name,
-      surname: user.surname,
-      roles: user.roles,
-      status: user.status,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    });
+    return res.json(user);
   } catch (err) {
-    if (err.message === "Access token invalido o scaduto") {
-      return res.status(401).json({ message: "Token non valido o scaduto" });
-    }
-    return res.status(500).json({ message: "Errore interno del server", error: err.message });
+    return res.status(401).json({ message: "Token invalido o scaduto" });
   }
+}
+
+export async function csrf(req, res) {
+  const csrfToken = crypto.randomBytes(32).toString("hex");
+  setCsrfTokenCookie(res, csrfToken);
+  return res.json({ ok: true });
 }

@@ -1,6 +1,11 @@
 import { createRouter, createWebHistory } from "vue-router";
-import AuthLayout from "../layouts/AuthLayout.vue";
 import { useAuthStore } from "@/stores/auth.store";
+
+/*
+  NOTE:
+  - Con accessToken in cookie HttpOnly non esiste più localStorage.getItem("accessToken").
+  - Per sapere se l'utente è loggato facciamo /auth/me (cookie-based).
+*/
 
 /* STRUTTURA DELLE ROTTE:
 
@@ -106,26 +111,16 @@ const router = createRouter({
 // Route Guard globale --> controlla autenticazione prima di ogni cambio di rotta
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
-  const token = localStorage.getItem("accessToken");
+
+  // Inizializza una sola volta lo stato auth (cookie-based)
+  if (!authStore.initialized && !authStore.loading) {
+    await authStore.fetchMe();
+  }
 
   // Se la rotta richiede autenticazione
   if (to.matched.some((record) => record.meta.requiresAuth)) {
-    if (!token) {
+    if (!authStore.isAuthenticated) {
       return next("/login");
-    }
-
-    // Se c'è token ma lo store non è stato inizializzato
-    if (!authStore.isAuthenticated && !authStore.loading) {
-      try {
-        await authStore.fetchMe();
-
-        if (!authStore.isAuthenticated) {
-          return next("/login");
-        }
-      } catch (error) {
-        console.error("Errore durante fetchMe:", error);
-        return next("/login");
-      }
     }
   }
 

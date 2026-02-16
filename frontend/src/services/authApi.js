@@ -3,21 +3,29 @@ import axios from "axios";
 
 /**
  * authApi:
- * - usa /auth/* (Nginx fa proxy su /auth/ verso proxy_guard)
- * - withCredentials: true per inviare/ricevere cookie (refreshToken)
+ * - usa /auth/* (proxy_guard)
+ * - withCredentials: true per inviare/ricevere cookie (refreshToken, accessToken)
+ * - aggiunge header CSRF sulle richieste state-changing
  */
+
+function getCookie(name) {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop().split(";").shift();
+  return null;
+}
+
 const authApi = axios.create({
   baseURL: "/auth",
   withCredentials: true,
 });
 
-// Se vuoi: allega accessToken anche su /auth (es. /auth/me)
 authApi.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("accessToken");
-    if (token) {
+    const csrf = getCookie("csrfToken");
+    if (csrf) {
       config.headers = config.headers || {};
-      config.headers.Authorization = `Bearer ${token}`;
+      config.headers["X-CSRF-Token"] = csrf;
     }
     return config;
   },

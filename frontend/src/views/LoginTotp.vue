@@ -124,7 +124,7 @@ async function initializeSelectedBuildings() {
 
   const buildings = await fetchAllBuildings();
   if (buildings.length > 0) {
-    const buildingIds = buildings.map(b => b._id);
+    const buildingIds = buildings.map((b) => b._id);
     selectedBuildingsStore.setSelectedBuildings(buildingIds);
     console.log(`Inizializzati ${buildingIds.length} edifici dopo login`);
   }
@@ -136,10 +136,8 @@ async function verifyTotp() {
   loading.value = true;
 
   try {
-    const response = await loginVerifyTotp(code.value);
-
-    // access token
-    localStorage.setItem("accessToken", response.data.accessToken);
+    // Il backend ora imposta accessToken/refreshToken su cookie HttpOnly.
+    await loginVerifyTotp(code.value);
 
     // one-shot: cancella challenge
     sessionStorage.removeItem("loginChallengeToken");

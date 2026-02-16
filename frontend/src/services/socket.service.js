@@ -6,26 +6,20 @@ let socket = null;
 
 /**
  * initSocket
- * - connette al server socket.io tramite Vite proxy (path relativo)
- * - autentica via JWT (handshake.auth.token)
+ * - connette al server socket.io tramite path relativo
+ * - autenticazione: cookie HttpOnly (accessToken) inviato automaticamente dal browser
  * - join rooms dopo connect
  */
-export function initSocket({ token, userId, role, buildingIds } = {}) {
-  if (!token) {
-    console.warn("[socket] initSocket skipped: missing token");
-    return null;
-  }
-
+export function initSocket({ userId, role, buildingIds } = {}) {
   // già connesso/inizializzato
   if (socket) return socket;
 
   socket = io("/", {
     path: "/socket.io",
     transports: ["polling", "websocket"],
-    auth: { token },
-    withCredentials: true, // ok, anche se JWT; non rompe
+    withCredentials: true,
     reconnection: true,
-    reconnectionAttempts: 5,      // evita loop infinito
+    reconnectionAttempts: 5,
     reconnectionDelay: 500,
     reconnectionDelayMax: 3000,
     timeout: 8000,

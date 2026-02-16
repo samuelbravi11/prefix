@@ -12,8 +12,8 @@ import UserData from "@/components/UserData.vue";
 
 /*
   AuthLayout.vue
-  - verifica sessione (fetchMe)
-  - init socket realtime
+  - verifica sessione (fetchMe) usando cookie HttpOnly
+  - init socket realtime (cookie-based)
   - fetch notifiche
 */
 
@@ -38,26 +38,20 @@ function updatePageTitle(title) {
 }
 
 onMounted(async () => {
-  const token = localStorage.getItem("accessToken");
-  if (!token) return router.push("/login");
-
   try {
-    // fetch utente (se 401, il tuo interceptor dovrebbe provare refresh)
     await authStore.fetchMe();
 
     if (!authStore.isAuthenticated || !authStore.user) {
-      authStore.logout();
       return router.push("/login");
     }
 
     if (authStore.user.status !== "active") {
-      authStore.logout();
+      await authStore.logout();
       return router.push("/login");
     }
 
-    // Inizializza socket (passa token + info rooms)
+    // Inizializza socket (cookie-based)
     initSocket({
-      token,
       userId: authStore.user._id,
       role: authStore.user.roles?.[0]?.roleName,
       buildingIds: authStore.user.buildingIds || [],
@@ -67,7 +61,7 @@ onMounted(async () => {
     await notificationStore.fetchNotifications();
   } catch (err) {
     console.error("Errore inizializzazione AuthLayout:", err);
-    authStore.logout();
+    await authStore.logout();
     router.push("/login");
   }
 });

@@ -4,71 +4,67 @@ import authApi from "@/services/authApi";
 
 /**
  * api:
- * - usa /api/v1/* (Nginx fa proxy su /api/ verso proxy_guard)
+ * - usa /api/v1/* (proxy_guard)
+ * - usa cookie HttpOnly (accessToken) -> niente Authorization header
  * - gestisce refresh automatico quando accessToken scade (401)
+ * - aggiunge CSRF header (double-submit cookie) per richieste state-changing
  */
+
+function getCookie(name) {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop().split(";").shift();
+  return null;
+}
+
 const api = axios.create({
   baseURL: "/api/v1",
-  withCredentials: true, // ok tenerlo true (non fa male) e aiuta se in futuro usi cookie anche qui
+  withCredentials: true, // fondamentale per inviare cookie HttpOnly
 });
 
-// Stato per gestire il refresh del token
 let isRefreshing = false;
 let failedQueue = [];
 
-/**
- * Risolve o rigetta tutte le richieste che stavano aspettando il refresh.
- */
-const processQueue = (error, token = null) => {
+const processQueue = (error) => {
   failedQueue.forEach((prom) => {
     if (error) prom.reject(error);
-    else prom.resolve(token);
+    else prom.resolve(true);
   });
   failedQueue = [];
 };
 
-/**
- * Interceptor request: aggiunge Bearer accessToken
- */
+// Request interceptor: aggiunge X-CSRF-Token se presente
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("accessToken");
-    if (token) {
+    const csrf = getCookie("csrfToken");
+    if (csrf) {
       config.headers = config.headers || {};
-      config.headers.Authorization = `Bearer ${token}`;
+      config.headers["X-CSRF-Token"] = csrf;
     }
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-/**
- * Interceptor response: se 401 -> refresh access token e ritenta
- */
+// Response interceptor: se 401 -> refresh e ritenta
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-
-    // Se non c'è config (errore strano), propaga
     if (!originalRequest) return Promise.reject(error);
 
-    // Solo per 401
     if (error.response?.status !== 401) {
       return Promise.reject(error);
     }
 
-    // Evita loop infinito: se già ritentata, fai logout hard
+    // Evita loop infinito
     if (originalRequest._retry) {
-      localStorage.removeItem("accessToken");
       if (window.location.pathname !== "/login") window.location.href = "/login";
       return Promise.reject(error);
     }
 
-    // Se per qualche motivo qualcuno chiama refresh passando da api, blocca qui
-    // (consigliato: refresh si fa SOLO con authApi)
+    // Non tentare refresh se stai già chiamando refresh
     if (originalRequest.url?.includes("/auth/refresh")) {
-      localStorage.removeItem("accessToken");
       if (window.location.pathname !== "/login") window.location.href = "/login";
       return Promise.reject(error);
     }
@@ -78,49 +74,35 @@ api.interceptors.response.use(
       return new Promise((resolve, reject) => {
         failedQueue.push({ resolve, reject });
       })
-        .then((newToken) => {
+        .then(() => {
           originalRequest._retry = true;
-          originalRequest.headers = originalRequest.headers || {};
-          originalRequest.headers.Authorization = `Bearer ${newToken}`;
           return api(originalRequest);
         })
         .catch((err) => Promise.reject(err));
     }
 
-    // Avvia refresh
     originalRequest._retry = true;
     isRefreshing = true;
 
     try {
-      // Refresh tramite authApi (baseURL /auth)
-      const refreshResponse = await authApi.post("/refresh", {
-        fingerprintHash: localStorage.getItem("fingerprintHash"),
-      }, {
-        headers: { "Content-Type": "application/json" },
-      });
+      await authApi.post(
+        "/refresh",
+        {
+          fingerprintHash: localStorage.getItem("fingerprintHash"),
+        },
+        {
+          headers: { "Content-Type": "application/json" },
+        }
+      );
 
-      const newAccessToken = refreshResponse.data?.accessToken;
-      if (!newAccessToken) {
-        throw new Error("Refresh OK ma accessToken mancante in risposta");
-      }
+      // sblocca coda
+      processQueue(null);
 
-      // Salva nuovo token
-      localStorage.setItem("accessToken", newAccessToken);
-
-      // Sblocca coda
-      processQueue(null, newAccessToken);
-
-      // Ritenta richiesta originale
-      originalRequest.headers = originalRequest.headers || {};
-      originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+      // ritenta richiesta originale (cookie accessToken aggiornato)
       return api(originalRequest);
     } catch (refreshError) {
-      processQueue(refreshError, null);
-
-      // Logout
-      localStorage.removeItem("accessToken");
+      processQueue(refreshError);
       if (window.location.pathname !== "/login") window.location.href = "/login";
-
       return Promise.reject(refreshError);
     } finally {
       isRefreshing = false;

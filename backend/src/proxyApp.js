@@ -7,6 +7,7 @@ import http from "http";
 import requestLogger from "./middleware/apiLogger.middleware.js";
 import requireAuth from "./middleware/authGuard.middleware.js";
 import rbacGuard from "./middleware/rbacGuard.middleware.js";
+import csrfGuard from "./middleware/csrfGuard.middleware.js";
 
 import { emitEvent } from "./gateway/ws.gateway.js";
 import { setupSwagger } from "./swagger/setupSwagger.js";
@@ -208,15 +209,19 @@ proxyApp.use(
   })
 );
 
-// gestisci preflight velocemente
-// proxyApp.options("*", cors());
-
 /* =========================
    Parsers + Logger
 ========================= */
 proxyApp.use(express.json());
 proxyApp.use(cookieParser());
 proxyApp.use(requestLogger);
+
+/* =========================
+   CSRF guard (double submit)
+   - Applica il controllo su tutte le richieste state-changing.
+   - Le rotte pubbliche di onboarding/login sono esentate via allowlist nel middleware.
+========================= */
+proxyApp.use(csrfGuard);
 
 /* =========================
    Swagger (pubblico)

@@ -148,11 +148,15 @@ const authStore = useAuthStore();
 const selectedBuildingsStore = useSelectedBuildingsStore();
 
 // Controlla se l'utente è già loggato al caricamento della pagina
-onMounted(() => {
-  const token = localStorage.getItem("accessToken");
-  if (token) {
-    // Se c'è un token, l'utente è già loggato
-    initializeSelectedBuildings();
+onMounted(async () => {
+  try {
+    await authStore.fetchMe();
+    if (authStore.isAuthenticated) {
+      await initializeSelectedBuildings();
+      router.push("/");
+    }
+  } catch {
+    // se non autenticato, resta su login
   }
 });
 
