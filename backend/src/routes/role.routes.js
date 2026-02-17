@@ -6,5 +6,6 @@ const router = Router();
 router.post("/roles", createRole);
 router.get("/roles", listRoles);
 router.get("/permissions", listPermissions);
+router.delete("/roles/:id", deleteRole);
 
 export default router;

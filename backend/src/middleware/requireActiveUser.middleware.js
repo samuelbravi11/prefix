@@ -1,21 +1,18 @@
 import { getTenantModels } from "../utils/tenantModels.js";
-// Middleware per il controllo dello stato dell'utente
-// - active: ok --> carico dati dell'utente
-// - other: not ok --> utente non attivo
 
+// Middleware per il controllo dello stato dell'utente
+// - active: ok --> carico dati dell'utente + permissions
+// - other: not ok --> utente non attivo
 export default async function requireActiveUser(req, res, next) {
   try {
     if (!req.user?._id) {
       return res.status(401).json({ message: "Utente non autenticato" });
     }
 
-    console.log("[requireActiveUser] req.user (prima):", req.user);
+    const { User, Role, Permission } = getTenantModels(req);
 
     // carico l’utente vero
-    const { User } = getTenantModels(req);
     const user = await User.findById(req.user._id).lean();
-
-    console.log("[requireActiveUser] user dal DB:", user);
 
     if (!user) {
       return res.status(401).json({ message: "Utente non trovato" });
@@ -28,16 +25,38 @@ export default async function requireActiveUser(req, res, next) {
       });
     }
 
+    // ✅ carico permissions dal ruolo (serve per buildings:inherit_all)
+    const roleIds = (user.roles || []).map((id) => id.toString());
+
+    let permissions = [];
+    if (roleIds.length) {
+      const roles = await Role.find({ _id: { $in: roleIds } })
+        .select("_id permission")
+        .lean();
+
+      const permIds = roles.flatMap((r) => r.permission || []).map((id) => id.toString());
+
+      if (permIds.length) {
+        const perms = await Permission.find({ _id: { $in: permIds } })
+          .select("name")
+          .lean();
+        permissions = [...new Set(perms.map((p) => p.name))];
+      }
+    }
+
+    const inheritAllBuildings =
+      user.isBootstrapAdmin === true || permissions.includes("buildings:inherit_all");
+
     // arricchisco req.user --> costruisco dati utente
     req.user = {
       _id: user._id,
       status: user.status,
       roleIds: user.roles || [],
       buildingIds: user.buildingIds || [],
+      isBootstrapAdmin: user.isBootstrapAdmin === true,
+      permissions,
+      inheritAllBuildings,
     };
-
-    console.log("[requireActiveUser] req.user (finale):", req.user);
-    console.log("[requireActiveUser] buildingIds:", req.user.buildingIds);
 
     next();
   } catch (err) {

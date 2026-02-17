@@ -12,7 +12,7 @@ export const BASE_PERMISSIONS = [
   // Area riservata / accesso
   "area_riservata:access",
 
-  // Profilo / auth
+  // Auth base (utente registrato)
   "auth:login",
 
   // Notifiche (lettura)
@@ -21,14 +21,28 @@ export const BASE_PERMISSIONS = [
   // Dashboard base
   "dashboard:view",
 
-  // Eventi / interventi (lettura)
+  // Eventi (lettura)
   "events:view",
-  "interventions:view",
 
-  // Buildings (solo associati)
+  // Buildings:
+  // - associati (vista “mia”)
   "buildings:view_associated",
+  // - tabella “tutti” necessaria per selezionare un edificio e fare richiesta assegnazione
+  "buildings:view_all",
 
-  // (opzionale) richieste utente secondario
-  // "requests:assign_building:create",
+  // Richieste (utente secondario/base)
+  "requests:assign_building:create",
+  // (opzionale, se vuoi che anche user_base possa chiedere un ruolo)
   // "requests:assign_role:create",
+
+  // Oggetti e regole (lettura)
+  "assets:view",
+  "rules:view",
+
+  // Interventi:
+  // - lettura (tabella/report)
+  "interventions:view",
+  // - creazione e bulk upload (se vuoi che user_base possa inserire interventi)
+  "interventions:manage",
+  "interventions:bulk_upload",
 ];

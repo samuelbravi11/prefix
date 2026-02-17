@@ -13,12 +13,31 @@ export const getMe = async (req, res) => {
 
     const user = await User.findById(req.user._id)
       .select("_id name surname email roles status buildingIds createdAt updatedAt")
-      .populate("roles", "roleName")
+      .populate({
+        path: "roles",
+        select: "roleName permission",
+        populate: { path: "permission", select: "name" },
+      })
       .lean();
 
     if (!user) return res.status(404).json({ message: "Utente non trovato" });
 
-    return res.json({ success: true, user });
+    const permissions = [
+      ...new Set(
+        (user.roles || [])
+          .flatMap((r) => (r.permission || []).map((p) => p.name))
+          .filter(Boolean)
+      ),
+    ];
+
+    const inheritAllBuildings = permissions.includes("buildings:inherit_all");
+
+    return res.json({
+      success: true,
+      user,
+      permissions,
+      inheritAllBuildings,
+    });
   } catch (err) {
     console.error("Errore in getMe:", err);
     return res.status(500).json({ message: "Errore interno", error: err.message });
@@ -261,8 +280,9 @@ export const getUsersBuildings = async (req, res) => {
     const missing = String(req.query.missing || "").toLowerCase() === "true";
     const rawStatus = req.query.status;
 
+    // default: active (come richiesto per la pagina assegnazione edifici)
     const allowedStatuses = ["pending", "active", "disabled"];
-    let status = null;
+    let status = "active";
 
     if (rawStatus !== undefined) {
       status = String(rawStatus).trim().toLowerCase();
@@ -318,32 +338,31 @@ export const updateUserBuildings = async (req, res) => {
 
     const { User, Building } = getTenantModels(req);
 
-    // ✅ blocco pending
+    // solo utenti ACTIVE per questa funzionalità
     const userDoc = await User.findById(id).select("_id status");
     if (!userDoc) return res.status(404).json({ message: "Utente non trovato" });
 
-    if (userDoc.status === "pending") {
+    if (userDoc.status !== "active") {
       return res.status(409).json({
-        message: "Non puoi assegnare building a un utente 'pending'. Prima approvalo (status -> active).",
+        message: "Puoi assegnare edifici solo a utenti 'active'.",
         currentStatus: userDoc.status,
       });
     }
 
     const uniqueIds = [...new Set(buildingIds.map(String))];
 
-    const existingBuildings = await Building.find({ _id: { $in: uniqueIds } })
+    // assegna solo edifici attivi
+    const existingBuildings = await Building.find({ _id: { $in: uniqueIds }, isActive: true })
       .select("_id")
       .lean();
 
     if (existingBuildings.length !== uniqueIds.length) {
-      return res.status(400).json({ message: "Uno o più building non esistono" });
+      return res.status(400).json({
+        message: "Uno o più building non esistono oppure non sono attivi",
+      });
     }
 
-    const user = await User.findByIdAndUpdate(
-      id,
-      { buildingIds: uniqueIds },
-      { new: true }
-    )
+    const user = await User.findByIdAndUpdate(id, { buildingIds: uniqueIds }, { new: true })
       .select("_id name surname email status roles buildingIds")
       .populate("roles", "roleName")
       .lean();
@@ -353,3 +372,87 @@ export const updateUserBuildings = async (req, res) => {
     return res.status(500).json({ message: "Errore update buildings", error: err.message });
   }
 };
+
+
+export async function searchUsers(req, res) {
+  try {
+    const { User, Building } = getTenantModels(req);
+
+    const qRaw = (req.query.q || "").toString().trim();
+    const page = Math.max(1, parseInt(req.query.page || "1", 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || "25", 10) || 25));
+
+    // Se q è vuota: mostra tutti (paginated) per la tabella iniziale
+    const filter = {};
+
+    if (qRaw.length > 0) {
+      // case-insensitive "contains"
+      const rx = new RegExp(escapeRegExp(qRaw), "i");
+      filter.$or = [
+        { name: rx },
+        { surname: rx },
+        { email: rx },
+      ];
+    }
+
+    const [total, users] = await Promise.all([
+      User.countDocuments(filter),
+      User.find(filter)
+        .sort({ createdAt: -1, _id: 1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .select("_id name surname email status roles buildingIds createdAt")
+        .populate("roles", "roleName permissions") // tieni permissions se ti serve mostrarle
+        .lean(),
+    ]);
+
+    // Risolvo buildings (solo attivi) per rendere la UI comoda
+    const allBuildingIds = [
+      ...new Set(
+        users
+          .flatMap((u) => Array.isArray(u.buildingIds) ? u.buildingIds : [])
+          .map((id) => String(id))
+      ),
+    ];
+
+    let buildingsMap = new Map();
+    if (allBuildingIds.length > 0) {
+      const buildings = await Building.find({ _id: { $in: allBuildingIds }, isActive: true })
+        .select("_id name address city isActive")
+        .lean();
+
+      buildingsMap = new Map(buildings.map((b) => [String(b._id), b]));
+    }
+
+    const items = users.map((u) => {
+      const buildingIds = Array.isArray(u.buildingIds) ? u.buildingIds : [];
+      const buildings = buildingIds
+        .map((bid) => buildingsMap.get(String(bid)))
+        .filter(Boolean);
+
+      return {
+        ...u,
+        buildings, // array buildings attivi
+      };
+    });
+
+    return res.json({
+      page,
+      limit,
+      total,
+      q: qRaw,
+      items,
+    });
+  } catch (err) {
+    console.error("[searchUsers] error:", err);
+    return res.status(500).json({
+      message: "Errore ricerca utenti",
+      error: err.message,
+    });
+  }
+}
+
+// Evita regex injection / errori
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}

@@ -281,7 +281,9 @@ proxyApp.use("/api/v1/notifications", requireAuth, rbacGuard, forwardToInternal(
 proxyApp.use("/api/v1/buildings", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
 proxyApp.use("/api/v1/events", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
 proxyApp.use("/api/v1/interventions", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
-proxyApp.use("/api/v1/calendar", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
+// proxyApp.use("/api/v1/calendar", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
+proxyApp.use("/api/v1/assets", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
+proxyApp.use("/api/v1/rules", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
 
 proxyApp.get("/health", (req, res) => {
   res.json({

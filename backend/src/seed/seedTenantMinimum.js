@@ -18,7 +18,16 @@ export async function seedTenantMinimum(conn) {
   const Permission = conn.models.Permission || conn.model("Permission", PermissionSchema);
 
   // Tutte le permission "possibili"
-  const allPermissionNames = [...new Set(Object.values(PERMISSION_MAP))];
+  const permissionNamesFromRoutes = [...new Set(Object.values(PERMISSION_MAP))];
+
+  // extra permissions "di sistema" (non legate a route)
+  const EXTRA_SYSTEM_PERMISSIONS = [
+    "buildings:inherit_all",
+  ];
+
+  // Tutte le permission "possibili"
+  const allPermissionNames = [...new Set([...permissionNamesFromRoutes, ...EXTRA_SYSTEM_PERMISSIONS])];
+
 
   // 1) upsert permissions
   const permDocsByName = new Map();

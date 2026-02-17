@@ -9,6 +9,9 @@ const router = express.Router();
 // GET /api/v1/users/me
 router.get("/me", userController.getMe);
 
+// ricerca utenti per "Informazioni utenti"
+router.get("/search", userController.searchUsers);
+
 // GET /api/v1/users/pending
 router.get("/pending", userController.getPendingUsers);
 
@@ -30,7 +33,6 @@ router.patch("/:id/status", userController.updateUserStatus);
 // PATCH /api/v1/users/:id/buildings
 router.patch("/:id/buildings", userController.updateUserBuildings);
 
-// (opzionali, se vuoi tenerli separati come “assign” espliciti)
 // PUT /api/v1/users/:id/assign-role
 router.put("/:id/assign-role", userAssignment.assignUserRole);
 

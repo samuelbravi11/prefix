@@ -55,19 +55,27 @@ export async function assignUserBuildings(req, res) {
 
     const { User, Building } = getTenantModels(req);
 
-    const uniqueIds = [...new Set(buildingIds.map(String))];
+    const userDoc = await User.findById(id).select("_id status");
+    if (!userDoc) return res.status(404).json({ message: "Utente non trovato" });
 
-    const existing = await Building.find({ _id: { $in: uniqueIds } }).select("_id").lean();
-    if (existing.length !== uniqueIds.length) {
-      return res.status(400).json({ message: "Uno o più building non esistono" });
+    if (userDoc.status !== "active") {
+      return res.status(409).json({
+        message: "Puoi assegnare edifici solo a utenti 'active'.",
+        currentStatus: userDoc.status,
+      });
     }
 
-    const user = await User.findByIdAndUpdate(
-      id,
-      { buildingIds: uniqueIds },
-      { new: true }
-    ).lean();
+    const uniqueIds = [...new Set(buildingIds.map(String))];
 
+    const existing = await Building.find({ _id: { $in: uniqueIds }, isActive: true })
+      .select("_id")
+      .lean();
+
+    if (existing.length !== uniqueIds.length) {
+      return res.status(400).json({ message: "Uno o più building non esistono oppure non sono attivi" });
+    }
+
+    const user = await User.findByIdAndUpdate(id, { buildingIds: uniqueIds }, { new: true }).lean();
     if (!user) return res.status(404).json({ message: "Utente non trovato" });
 
     return res.json({ message: "Edifici assegnati", user });

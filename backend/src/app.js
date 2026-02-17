@@ -11,8 +11,10 @@ import notificationRoutes from "./routes/notification.routes.js";
 import buildingRoutes from "./routes/building.routes.js"
 import eventRoutes from "./routes/event.routes.js";
 import interventionRoutes from "./routes/intervention.routes.js";
-import tenantProvisionRoutes from "./routes/tenantProvision.routes.js"
+import assetRoutes from "./routes/asset.routes.js";
+import ruleRoutes from "./routes/rule.routes.js";
 // import calendarRoutes from "./routes/calendar.routes.js";
+import tenantProvisionRoutes from "./routes/tenantProvision.routes.js"
 
 import requestLogger from "./middleware/apiLogger.middleware.js";
 import rbacDecisionController from "./controllers/rbacDecision.controller.js";
@@ -126,7 +128,9 @@ app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/buildings", buildingRoutes);
 app.use("/api/v1/events", eventRoutes);
 app.use("/api/v1/interventions", interventionRoutes);
-//app.use("/api/v1/calendar", calendarRoutes);
+// app.use("/api/v1/calendar", calendarRoutes);
+app.use("/api/v1/assets", assetRoutes);
+app.use("/api/v1/rules", ruleRoutes);
 
 
 export default app;
