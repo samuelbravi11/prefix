@@ -74,7 +74,7 @@ export const getMe = async (req, res) => {
 export const getPendingUsers = async (req, res) => {
   try {
     const users = await User.find({
-      status: "PENDING",
+      status: "pending",
     }).lean();
 
     res.json(users);

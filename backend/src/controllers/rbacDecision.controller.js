@@ -32,13 +32,6 @@ export default async function rbacDecisionController(req, res) {
 
     // Se l'utente non esiste --> DENY
     if (!user) {
-      await AuditLog.create({
-        userId,
-        permission,
-        decision: "DENY",
-        reason: "User not found"
-      });
-
       return res.json({ allow: false, reason: "User not found" });
     }
 
@@ -47,10 +40,10 @@ export default async function rbacDecisionController(req, res) {
     // Se l'utente non è associato ad un ruolo --> DENY
     if (!user.roles || user.roles.length === 0) {
       await AuditLog.create({
-        userId,
-        permission,
-        decision: "DENY",
-        reason: "User has no roles assigned"
+        entityType: "RBAC_DECISION",
+        action: "DENY",
+        byUser: user._id,  // ✅ ora l'utente esiste
+        details: { permission, reason: "User has no roles assigned" }
       });
 
       return res.json({ allow: false });

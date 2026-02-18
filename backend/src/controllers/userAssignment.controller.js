@@ -16,25 +16,23 @@ import User from "../models/User.js";
 */
 export const assignUserRole = async (req, res) => {
   const { id } = req.params;
-  const { role } = req.body;
+  const { roleId } = req.body;  
 
-  if (!role) {
+  if (!roleId) {
     return res.status(400).json({
-      message: "Campo 'role' mancante",
+      message: "Campo 'roleId' mancante",
     });
   }
 
   try {
     const user = await User.findByIdAndUpdate(
       id,
-      { role },
+      { roles: [roleId] },  
       { new: true }
     ).lean();
 
     if (!user) {
-      return res.status(404).json({
-        message: "Utente non trovato",
-      });
+      return res.status(404).json({ message: "Utente non trovato" });
     }
 
     res.json(user);
