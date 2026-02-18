@@ -133,7 +133,7 @@ export async function getRequestById(req, res) {
 
 /**
  * POST /api/v1/requests/assign-role
- * ✅ Sicurezza: ignoro userId dal client, uso req.user._id
+ * Sicurezza: ignoro userId dal client, uso req.user._id
  */
 export async function createAssignRoleRequest(req, res) {
   const { Request } = getTenantModels(req);
@@ -177,7 +177,7 @@ export async function createAssignRoleRequest(req, res) {
 
 /**
  * POST /api/v1/requests/assign-building
- * ✅ Sicurezza: ignoro userId dal client, uso req.user._id
+ * Sicurezza: ignoro userId dal client, uso req.user._id
  */
 export async function createAssignBuildingRequest(req, res) {
   const { Request, Building } = getTenantModels(req);
@@ -269,9 +269,23 @@ export async function updateRequest(req, res) {
             ? "La tua richiesta di assegnazione edificio è stata rifiutata."
             : "La tua richiesta di assegnazione ruolo è stata rifiutata.",
         priority: "medium",
+        severity: "warning",
+        data: {
+          requestId: request._id,
+          requestType: request.requestType,
+          status,
+          payload: request.payload,
+        },
+        entity: {
+          type: "request",
+          id: String(request._id),
+          name: request.requestType,
+        },
         relatedEventId: null,
         read: false,
         readAt: null,
+        archived: false,
+        archivedAt: null,
       });
       return res.json({ request, message: "Richiesta rifiutata" });
     }
@@ -318,9 +332,23 @@ export async function updateRequest(req, res) {
           ? "La tua richiesta di assegnazione edificio è stata approvata."
           : "La tua richiesta di assegnazione ruolo è stata approvata.",
       priority: "low",
+      severity: "success",
+      data: {
+        requestId: request._id,
+        requestType: request.requestType,
+        status,
+        payload: request.payload,
+      },
+      entity: {
+        type: "request",
+        id: String(request._id),
+        name: request.requestType,
+      },
       relatedEventId: null,
       read: false,
       readAt: null,
+      archived: false,
+      archivedAt: null,
     });
 
     return res.json({ request, user: updatedUser, message: "Richiesta approvata: utente aggiornato" });

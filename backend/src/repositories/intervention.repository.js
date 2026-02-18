@@ -36,10 +36,10 @@ export async function getInterventionsTableQuery(
 
   const filter = { buildingId: { $in: buildingObjectIds } };
 
-  // ✅ compat: assetId singolo
+  // compat: assetId singolo
   if (assetId) filter.assetId = new mongoose.Types.ObjectId(assetId);
 
-  // ✅ nuovo: assetIds multipli (se presenti, hanno priorità)
+  // nuovo: assetIds multipli (se presenti, hanno priorità)
   if (Array.isArray(assetIds) && assetIds.length > 0) {
     const objIds = assetIds.map((id) => new mongoose.Types.ObjectId(id));
     filter.assetId = { $in: objIds };

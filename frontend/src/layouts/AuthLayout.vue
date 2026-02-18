@@ -1,98 +1,136 @@
+<template>
+  <div class="d-flex vh-100 overflow-hidden">
+    <!-- Sidebar -->
+    <Sidebar @open-settings="showSettings = true" />
+
+    <!-- Main -->
+    <div class="d-flex flex-column flex-grow-1 overflow-hidden">
+      <!-- Topbar -->
+      <header class="topbar d-flex align-items-center justify-content-between px-4 py-3">
+        <div class="d-flex align-items-center gap-3">
+          <h5 class="mb-0 fw-semibold text-dark">
+            {{ pageTitle }}
+          </h5>
+
+          <span class="text-muted small" v-if="subtitle">
+            {{ subtitle }}
+          </span>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+          <!-- unread counter -->
+          <button
+            v-if="notifStore.unreadCount > 0"
+            class="btn btn-sm btn-outline-primary position-relative"
+            @click="goToNotifications"
+          >
+            <i class="bi bi-bell me-1"></i>
+            Notifiche
+            <span class="notif-badge">
+              {{ notifStore.unreadCount }}
+            </span>
+          </button>
+
+          <!-- settings -->
+          <button class="btn btn-sm btn-outline-secondary" @click="showSettings = true">
+            <i class="bi bi-gear me-1"></i>
+            Impostazioni
+          </button>
+        </div>
+      </header>
+
+      <!-- Content -->
+      <main id="main-scroll" class="flex-grow-1 overflow-auto main-content">
+        <router-view />
+      </main>
+    </div>
+
+    <!-- Settings component -->
+    <Settings v-model="showSettings" />
+  </div>
+</template>
+
 <script setup>
-import { ref, onMounted, onUnmounted } from "vue";
-import { useRouter } from "vue-router";
-import { useAuthStore } from "@/stores/auth.store";
-import { useNotificationStore } from "@/stores/notification.store";
-import { initSocket, closeSocket } from "@/services/socket.service.js";
+import { computed, ref, watch, onMounted } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
 import Sidebar from "@/components/Sidebar.vue";
-import Navbar from "@/components/Navbar.vue";
 import Settings from "@/components/Settings.vue";
-import UserData from "@/components/UserData.vue";
 
-/*
-  AuthLayout.vue
-  - verifica sessione (fetchMe) usando cookie HttpOnly
-  - init socket realtime (cookie-based)
-  - fetch notifiche
-*/
+import { usePreferencesStore } from "@/stores/preferences.store";
+import { useNotificationStore } from "@/stores/notification.store";
 
-const authStore = useAuthStore();
-const notificationStore = useNotificationStore();
+const route = useRoute();
 const router = useRouter();
 
-const mainScrollContainer = ref(null);
-const currentPageTitle = ref("Dashboard");
+const prefsStore = usePreferencesStore();
+const notifStore = useNotificationStore();
 
 const showSettings = ref(false);
-const showUserData = ref(false);
 
-function openSettings() {
-  showSettings.value = true;
-}
-function openUserData() {
-  showUserData.value = true;
-}
-function updatePageTitle(title) {
-  currentPageTitle.value = title;
+// ROUTE TITLES
+const routeTitles = {
+  "/home": "Quick Access",
+  "/dashboard": "Dashboard",
+  "/calendar": "Calendario Interventi",
+  "/buildings-list": "Seleziona Edifici",
+  "/gestione-edifici": "Gestione Edifici",
+  "/gestione-utenti": "Gestione utenti",
+  "/oggetti-regole": "Oggetti & Regole",
+  "/interventi": "Interventi",
+  "/notifiche": "Notifiche",
+};
+
+const pageTitle = computed(() => {
+  return routeTitles[route.path] || "PreFix";
+});
+
+const subtitle = computed(() => {
+  if (route.path === "/home") return "Accesso rapido alle funzionalità disponibili";
+  if (route.path === "/notifiche") return "Centro notifiche e avvisi sistema";
+  return "";
+});
+
+function goToNotifications() {
+  router.push("/notifiche");
 }
 
 onMounted(async () => {
   try {
-    await authStore.fetchMe();
+    await prefsStore.fetch();
+    await notifStore.fetchUnreadCount();
 
-    if (!authStore.isAuthenticated || !authStore.user) {
-      return router.push("/login");
-    }
-
-    if (authStore.user.status !== "active") {
-      await authStore.logout();
-      return router.push("/login");
-    }
-
-    // Inizializza socket (cookie-based)
-    initSocket({
-      userId: authStore.user._id,
-      role: authStore.user.roles?.[0]?.roleName,
-      buildingIds: authStore.user.buildingIds || [],
-    });
-
-    // carica notifiche iniziali
-    await notificationStore.fetchNotifications();
-  } catch (err) {
-    console.error("Errore inizializzazione AuthLayout:", err);
-    await authStore.logout();
-    router.push("/login");
+    notifStore.startPolling(prefsStore.prefs.scheduler.pollingSeconds);
+  } catch (e) {
+    console.warn("Init preferences/notifications failed", e);
   }
 });
 
-onUnmounted(() => {
-  closeSocket();
-});
+watch(
+  () => route.path,
+  () => {
+    showSettings.value = false;
+  }
+);
 </script>
 
-<template>
-  <div class="d-flex vh-100">
-    <Sidebar
-      :scroll-container="mainScrollContainer"
-      @open-settings="openSettings"
-      @update-page-title="updatePageTitle"
-    />
+<style scoped>
+.topbar {
+  background: #ffffff;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
 
-    <div class="flex-grow-1 d-flex flex-column">
-      <Navbar
-        :page-title="currentPageTitle"
-        :scroll-container="mainScrollContainer"
-        @open-settings="openSettings"
-        @open-userdata="openUserData"
-      />
+.main-content {
+  background: #f7f9fc;
+}
 
-      <div class="flex-grow-1 overflow-auto bg-light" ref="mainScrollContainer">
-        <router-view />
-      </div>
-    </div>
-
-    <Settings v-model:show="showSettings" />
-    <UserData v-model:show="showUserData" />
-  </div>
-</template>
+/* notification badge */
+.notif-badge {
+  background: #0d6efd;
+  color: white;
+  border-radius: 50%;
+  font-size: 11px;
+  padding: 2px 6px;
+  margin-left: 6px;
+}
+</style>

@@ -25,7 +25,7 @@ export default async function requireActiveUser(req, res, next) {
       });
     }
 
-    // ✅ carico permissions dal ruolo (serve per buildings:inherit_all)
+    // carico permissions dal ruolo (serve per buildings:inherit_all)
     const roleIds = (user.roles || []).map((id) => id.toString());
 
     let permissions = [];

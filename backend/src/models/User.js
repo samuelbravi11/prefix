@@ -55,6 +55,12 @@ const UserSchema = new mongoose.Schema(
      */
     wantsNotifications: { type: Boolean, default: true, index: true },
 
+    /**
+     * Preferenze UI (MVP)
+     * Struttura libera, usata dal frontend (tema, scheduler polling, ecc.).
+     */
+    preferences: { type: mongoose.Schema.Types.Mixed, default: {} },
+
     // --------------------
     // ONBOARDING
     // --------------------

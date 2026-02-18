@@ -242,7 +242,7 @@
             <!-- STEP 5: COMPLETATO -->
             <div v-else class="text-center">
               <div class="alert alert-success">
-                ✅ Registrazione completata.
+                Registrazione completata.
                 <div class="mt-2">
                   Il tuo account è stato creato e il TOTP è configurato.
                   <br />

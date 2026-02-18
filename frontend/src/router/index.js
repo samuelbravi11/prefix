@@ -1,111 +1,40 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { useAuthStore } from "@/stores/auth.store";
 
-/*
-  NOTE:
-  - Con accessToken in cookie HttpOnly non esiste più localStorage.getItem("accessToken").
-  - Per sapere se l'utente è loggato facciamo /auth/me (cookie-based).
-*/
-
-/* STRUTTURA DELLE ROTTE:
-
-************************************
-- Rotte pubbliche:
-  /login --> Login.vue
-  /register --> Register.vue
-
-------------------------------------
-
-- Rotte protette (richiedono autenticazione):
-  / --> AuthLayout.vue
-    - rotte figlie:
-      "" (path vuoto) --> Dashboard.vue (rotta di default)
-      "user-requests" --> UserRequests.vue
-      (altre rotte protette possono essere aggiunte qui)
-************************************
-
-Layout AuthLayout.vue:
-  - Vue monta AuthLayout
-  - Sidebar e Navbar restano fisse
-  - <router-view/> carica tutte le pagine principali (Dashboard, Assets, Notifications, ecc.)
-  
-  Solo la rotta di layout è protetta da autenticazione, le rotte figlie ereditano questa protezione automaticamente.
-  Grazie ad AuthLayout, Sidebar e Navbar non si ricaricano ad ogni cambio di rotta figlia e
-  inoltre carico le notifiche globali una volta sola all’avvio dell’applicazione.
-*/
-
 const routes = [
-  {
-    path: "/login",
-    component: () => import("@/views/Login.vue"),
-    meta: { public: true },
-  },
-  {
-    path: "/login/totp",
-    component: () => import("@/views/LoginTotp.vue"),
-    meta: { public: true },
-  },
-  {
-    path: "/bootstrap",
-    component: () => import("@/views/Bootstrap.vue"),
-    meta: { public: true },
-  },
-  {
-    path: "/register",
-    component: () => import("@/views/Register.vue"),
-    meta: { public: true },
-  },
+  { path: "/login", component: () => import("@/views/Login.vue"), meta: { public: true } },
+  { path: "/login/totp", component: () => import("@/views/LoginTotp.vue"), meta: { public: true } },
+  { path: "/bootstrap", component: () => import("@/views/Bootstrap.vue"), meta: { public: true } },
+  { path: "/register", component: () => import("@/views/Register.vue"), meta: { public: true } },
+
   {
     path: "/",
     component: () => import("@/layouts/AuthLayout.vue"),
     meta: { requiresAuth: true },
     children: [
-      {
-        path: "",
-        redirect: "/dashboard",
-      },
-      {
-        path: "dashboard",
-        name: "dashboard",
-        component: () => import("@/views/Dashboard.vue"),
-      },
-      {
-        path: "user-requests",
-        name: "user-requests",
-        component: () => import("@/views/UserRequests.vue"),
-      },
-      {
-        path: "buildings-list",
-        name: "buildings-list",
-        component: () => import("@/views/BuildingsList.vue"),
-      },
-      {
-        path: "calendar",
-        name: "calendar",
-        component: () => import("@/views/Calendar.vue"),
-      },
-      {
-        path: "visualizzazione-tabellare",
-        name: "visualizzazione-tabellare",
-        component: () => import("@/views/VisualizzazioneTabellare.vue"),
-      },
-      {
-        path: "notifiche",
-        name: "notifiche",
-        component: () => import("@/views/Notifiche.vue"),
-      },
-      {
-        path: "gestione-utenti",
-        name: "gestione-utenti",
-        component: () => import("@/views/UserManagement.vue"),
-      },
-      {
-        path: "assegna-edifici",
-        name: "assegna-edifici",
-        component: () => import("@/views/UserBuildingsManagement.vue"),
-      },
+      { path: "", redirect: "/home" },
+
+      { path: "home", name: "home", component: () => import("@/views/HomeQuickAccess.vue") },
+
+      // specifiche
+      { path: "calendar", name: "calendar", component: () => import("@/views/Calendar.vue") },
+      { path: "buildings-list", name: "buildings-list", component: () => import("@/views/BuildingsList.vue") },
+      { path: "notifiche", name: "notifiche", component: () => import("@/views/Notifiche.vue") },
+
+      // generiche
+      { path: "dashboard", name: "dashboard", component: () => import("@/views/Dashboard.vue") },
+      { path: "gestione-utenti", name: "gestione-utenti", component: () => import("@/views/UsersModule.vue") },
+      { path: "gestione-edifici", name: "gestione-edifici", component: () => import("@/views/BuildingsModule.vue") },
+      { path: "oggetti-regole", name: "oggetti-regole", component: () => import("@/views/AssetsRulesModule.vue") },
+      { path: "interventi", name: "interventi", component: () => import("@/views/InterventionsModule.vue") },
+
+      // fallback interno
+      { path: ":pathMatch(.*)*", redirect: "/home" },
     ],
   },
+
+  // fallback globale
+  { path: "/:pathMatch(.*)*", redirect: "/home" },
 ];
 
 const router = createRouter({
@@ -113,28 +42,28 @@ const router = createRouter({
   routes,
 });
 
-// Route Guard globale --> controlla autenticazione prima di ogni cambio di rotta
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore();
 
-  // Inizializza una sola volta lo stato auth (cookie-based)
-  if (!authStore.initialized && !authStore.loading) {
-    await authStore.fetchMe();
-  }
+  const isPublic = Boolean(to.meta.public);
+  const requiresAuth = to.matched.some((r) => r.meta.requiresAuth);
 
-  // Se la rotta richiede autenticazione
-  if (to.matched.some((record) => record.meta.requiresAuth)) {
-    if (!authStore.isAuthenticated) {
-      return next("/login");
+  // fetchMe solo quando serve (route protette o utente già loggato)
+  if (!authStore.initialized && !authStore.loading && (requiresAuth || authStore.isAuthenticated)) {
+    try {
+      await authStore.fetchMe();
+    } catch {
+      // se fetchMe fallisce, lasciamo gestire dai controlli sotto
     }
   }
 
-  // Se la rotta è pubblica e l'utente è già autenticato, reindirizza alla dashboard
-  if (to.meta.public && authStore.isAuthenticated) {
-    return next("/dashboard");
-  }
+  // se la route richiede auth e non sei loggato
+  if (requiresAuth && !authStore.isAuthenticated) return next("/login");
 
-  next();
+  // se vai su route pubblica ma sei già loggato
+  if (isPublic && authStore.isAuthenticated) return next("/home");
+
+  return next();
 });
 
 export default router;

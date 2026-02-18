@@ -1,12 +1,12 @@
 import { defineStore } from "pinia";
 import authApi from "@/services/authApi";
+import api from "@/services/api";
 
-// store globale pinia per gestione autenticazione utente, che rappresenta:
-// - i dati dell’utente loggato (user)
-// - lo stato di autenticazione (isAuthenticated)
 export const useAuthStore = defineStore("auth", {
   state: () => ({
     user: null,
+    permissions: [],
+    inheritAllBuildings: false,
     isAuthenticated: false,
     loading: false,
     initialized: false,
@@ -17,12 +17,20 @@ export const useAuthStore = defineStore("auth", {
       this.loading = true;
 
       try {
-        await authApi.get("/csrf"); // ottiene CSRF token (double submit cookie) necessario per chiamare /me
-        const response = await authApi.get("/me");
-        this.user = response.data;
+        // CSRF token (double submit cookie)
+        await authApi.get("/csrf");
+
+        // Profilo completo (RBAC)
+        const res = await api.get("/users/me");
+        this.user = res.data?.user || null;
+        this.permissions = Array.isArray(res.data?.permissions) ? res.data.permissions : [];
+        this.inheritAllBuildings = Boolean(res.data?.inheritAllBuildings);
+
         this.isAuthenticated = true;
       } catch (err) {
         this.user = null;
+        this.permissions = [];
+        this.inheritAllBuildings = false;
         this.isAuthenticated = false;
       } finally {
         this.loading = false;
@@ -39,48 +47,14 @@ export const useAuthStore = defineStore("auth", {
         console.error("logout error", err);
       } finally {
         this.user = null;
+        this.permissions = [];
+        this.inheritAllBuildings = false;
         this.isAuthenticated = false;
         this.initialized = true;
 
-        // fingerprint non è un segreto, ma puliamo comunque
         localStorage.removeItem("fingerprintHash");
-
         window.location.href = "/login";
       }
     },
   },
 });
-
-/* IMPORTANTE: inizializza lo store da localStorage all’avvio dell’app
-- se c’è un token JWT nello storage, imposta isAuthenticated a true
-- NON imposta i dati utente (user) perché non li abbiamo
-- per avere i dati utente bisogna chiamare /auth/me dopo l’inizializzazione
-
-Il problema di trovare un token nello storage e assumere che l’utente sia autenticato è che:
-- NON verifica nulla
-- NON sa chi è l’utente
-- NON controlla scadenza
-
-Quindi lo stato iniziale dopo initFromStorage è "autenticato parzialmente", e bisogna chiamare /auth/me per completare l’autenticazione
-TODO: in futuro potremmo decodificare il JWT per estrarre i dati utente senza chiamare /auth/me oppure chiamare /auth/me automaticamente dentro initFromStorage. Questo oltre che a usare Cookye HttpOnly per memorizzare il token.
-
-Per ora ha senso così com’è perché:
-- il token JWT è memorizzato in localStorage (non sicuro, ma semplice)
-- tutta la logica di verifica utente è gestita nel backend
-- frontend non decide nulla di critico
-
-Serve solo a mantenere UI coerente, riavviare socket automaticamente e non buttare fuori l’utente al refresh
-*/
-/* RISOLTA PERCHE' ORA USIAMO L'ENDPOINT /auth/me DOPO IL REFRESH
-  **************************************************************
-initFromStorage() {
-  const token = localStorage.getItem("accessToken");
-  if (token) {
-    // senza /auth/me non puoi ricostruire l’utente
-    // quindi:
-    // - o decodifichi il JWT
-    // - o rimani "autenticato parzialmente" (autenticato dal punto di vista UI, ma non ho il profilo completo)
-    this.isAuthenticated = true; // autenticazione parziale
-  }
-}
-*/

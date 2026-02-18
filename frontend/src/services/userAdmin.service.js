@@ -9,17 +9,19 @@ export const fetchManagedUsers = () => api.get("/users");
 export const approveUser = (userId, roleName) =>
   api.patch(`/users/${userId}/approve`, roleName ? { roleName } : {});
 
-// UPDATE STATUS +/OR ROLE (active/disabled only)
-export const updateUserStatusOrRole = (userId, payload) =>
-  api.patch(`/users/${userId}/status`, payload);
+// UPDATE STATUS (active <-> disabled)
+export const updateUserStatus = (userId, status) =>
+  api.patch(`/users/${userId}/status`, { status });
+
+// UPDATE ROLE (active/disabled only)
+export const updateUserRole = (userId, roleName) =>
+  api.patch(`/users/${userId}/role`, { roleName });
 
 // BUILDINGS MANAGEMENT
-export const fetchUsersBuildings = (params = {}) =>
-  api.get("/users/buildings", { params });
+export const fetchUsersBuildings = (params = {}) => api.get("/users/buildings", { params });
 
 // assign buildings
-export const updateUserBuildings = (userId, buildingIds) =>
-  api.patch(`/users/${userId}/buildings`, { buildingIds });
+export const updateUserBuildings = (userId, buildingIds) => api.patch(`/users/${userId}/buildings`, { buildingIds });
 
 // list buildings (for dropdown)
 export const fetchAllBuildings = () => api.get("/buildings");

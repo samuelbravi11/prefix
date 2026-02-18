@@ -1,13 +1,15 @@
 <template>
-  <div class="p-3">
+  <NoPermissions v-if="!canEnter" hint="Permessi richiesti: users:building:view / users:building:update e/o requests:manage" />
+
+  <div v-else class="p-3">
     <Toast />
     <ConfirmDialog />
 
     <div class="d-flex align-items-center justify-content-between mb-3">
       <div>
-        <h4 class="mb-1">Assegnazione edifici agli utenti</h4>
+        <h4 class="mb-1">Assegnazione edifici</h4>
         <div class="text-muted">
-          Filtra utenti senza edifici associati e assegna uno o più building (non consentito per utenti pending).
+          Gestisci richieste di assegnazione e/o assegna manualmente edifici agli utenti.
         </div>
       </div>
 
@@ -15,224 +17,424 @@
         label="Ricarica"
         icon="pi pi-refresh"
         :loading="loading"
-        @click="reload"
+        size="small"
+        class="p-button-text"
+        @click="reloadAll"
       />
     </div>
 
-    <Toolbar class="mb-3">
-      <template #start>
-        <div class="d-flex gap-2 align-items-center flex-wrap">
-          <span class="fw-semibold">Mostra:</span>
+    <TabView>
+      <!-- TAB 1: RICHIESTE -->
+      <TabPanel header="Richieste assegnazione" v-if="canManageRequests">
+        <div class="mb-2 text-muted">
+          Qui vedi le richieste inviate dagli utenti per essere assegnati ad un edificio.
+        </div>
 
-          <Dropdown
-            v-model="missing"
-            :options="missingOptions"
+        <DataTable
+          :value="requestsSorted"
+          dataKey="_id"
+          paginator
+          :rows="10"
+          :loading="loading"
+          class="p-datatable-sm"
+          responsiveLayout="scroll"
+          emptyMessage="Nessuna richiesta trovata."
+        >
+          <Column header="Data" style="width: 170px;">
+            <template #body="{ data }">{{ formatDateTime(data.createdAt) }}</template>
+          </Column>
+
+          <Column header="Utente">
+            <template #body="{ data }">
+              <div class="fw-semibold">{{ data.userName || "-" }}</div>
+              <div class="small text-muted">{{ data.userEmail || "-" }}</div>
+            </template>
+          </Column>
+
+          <Column header="Edificio">
+            <template #body="{ data }">
+              <span class="fw-semibold">{{ buildingNameById(data.buildingId) }}</span>
+            </template>
+          </Column>
+
+          <Column header="Stato" style="width: 140px;">
+            <template #body="{ data }">
+              <Tag :value="data.status" :severity="statusSeverity(data.status)" />
+            </template>
+          </Column>
+
+          <Column header="Azioni" style="width: 220px;">
+            <template #body="{ data }">
+              <div class="d-flex gap-2">
+                <Button
+                  label="Accetta"
+                  icon="pi pi-check"
+                  severity="success"
+                  size="small"
+                  :loading="rowBusy[data._id] === true"
+                  :disabled="data.status !== 'PENDING'"
+                  @click="confirmAccept(data)"
+                />
+                <Button
+                  label="Rifiuta"
+                  icon="pi pi-times"
+                  severity="danger"
+                  size="small"
+                  :loading="rowBusy[data._id] === true"
+                  :disabled="data.status !== 'PENDING'"
+                  @click="confirmReject(data)"
+                />
+              </div>
+            </template>
+          </Column>
+        </DataTable>
+
+        <div class="text-muted mt-2 small">
+          Nota: le richieste vengono aggiornate e l’utente riceve una notifica (lato backend).
+        </div>
+      </TabPanel>
+
+      <!-- TAB 2: ASSEGNAZIONE MANUALE -->
+      <TabPanel header="Assegnazione manuale" v-if="canManualAssign">
+        <Toolbar class="mb-3">
+          <template #start>
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+              <span class="fw-semibold">Mostra:</span>
+              <Dropdown
+                v-model="missing"
+                :options="missingOptions"
+                optionLabel="label"
+                optionValue="value"
+                class="w-18rem"
+                @change="reloadUsers"
+              />
+              <span class="text-muted">Filtra la lista per utenti senza edificio.</span>
+            </div>
+          </template>
+
+          <template #end>
+            <div class="d-flex gap-2 align-items-center">
+              <span class="fw-semibold">Filtro:</span>
+              <InputText v-model="globalFilter" placeholder="Cerca per nome/email..." class="w-20rem" />
+            </div>
+          </template>
+        </Toolbar>
+
+        <DataTable
+          :value="usersFiltered"
+          dataKey="_id"
+          paginator
+          :rows="10"
+          :loading="loading"
+          class="p-datatable-sm"
+          responsiveLayout="scroll"
+          emptyMessage="Nessun utente trovato."
+          @row-click="openAssignDialog"
+        >
+          <Column field="name" header="Nome" />
+          <Column field="surname" header="Cognome" />
+          <Column field="email" header="Email" />
+
+          <Column header="Status" style="width: 130px;">
+            <template #body="{ data }">
+              <Tag :value="data.status" :severity="statusSeverity(data.status)" />
+            </template>
+          </Column>
+
+          <Column header="Edifici attuali" style="min-width: 260px;">
+            <template #body="{ data }">
+              <div v-if="(data.buildingIds || []).length === 0" class="text-muted">—</div>
+              <div v-else class="d-flex flex-wrap gap-1">
+                <Tag
+                  v-for="bid in data.buildingIds"
+                  :key="String(bid)"
+                  :value="buildingNameById(bid)"
+                  severity="info"
+                />
+              </div>
+            </template>
+          </Column>
+
+          <Column header="Suggerimento" style="width: 220px;">
+            <template #body>
+              <span class="text-muted small">Clicca la riga per assegnare</span>
+            </template>
+          </Column>
+        </DataTable>
+
+        <div class="text-muted mt-2">
+          Nota: vengono mostrati solo gli utenti <b>active</b>, poichè quelli in stato <b>pending</b> o <b>disabled</b> devono prima essere accettati/riattivati.
+        </div>
+
+        <!-- Dialog assegnazione -->
+        <Dialog v-model:visible="assignDialog.visible" header="Assegna edifici all’utente" modal :style="{ width: '760px' }">
+          <div v-if="assignDialog.user" class="mb-3">
+            <div class="fw-semibold">{{ assignDialog.user.name }} {{ assignDialog.user.surname }}</div>
+            <div class="text-muted small">{{ assignDialog.user.email }}</div>
+          </div>
+
+          <div class="mb-2 text-muted small">
+            Seleziona uno o più edifici da assegnare, poi conferma.
+          </div>
+
+          <MultiSelect
+            v-model="assignDialog.selectedBuildingIds"
+            :options="buildingOptions"
             optionLabel="label"
             optionValue="value"
-            class="w-18rem"
+            display="chip"
+            filter
+            class="w-100"
+            placeholder="Seleziona edifici..."
           />
 
-          <span class="fw-semibold ms-2">Status:</span>
-          <Dropdown
-            v-model="status"
-            :options="statusOptions"
-            optionLabel="label"
-            optionValue="value"
-            class="w-18rem"
-          />
-
-          <span class="text-muted">
-            Tip: imposta <b>missing=true</b> e <b>status=active</b> per la lista “operativa”.
-          </span>
-        </div>
-      </template>
-
-      <template #end>
-        <div class="d-flex gap-2 align-items-center">
-          <span class="fw-semibold">Filtro:</span>
-          <InputText v-model="globalFilter" placeholder="Cerca per nome/email..." class="w-20rem" />
-        </div>
-      </template>
-    </Toolbar>
-
-    <DataTable
-      :value="usersFiltered"
-      dataKey="_id"
-      paginator
-      :rows="10"
-      :loading="loading"
-      class="p-datatable-sm"
-      responsiveLayout="scroll"
-    >
-      <Column field="name" header="Nome" />
-      <Column field="surname" header="Cognome" />
-      <Column field="email" header="Email" />
-
-      <Column header="Status" style="width: 130px;">
-        <template #body="{ data }">
-          <Tag :value="data.status" :severity="statusSeverity(data.status)" />
-        </template>
-      </Column>
-
-      <Column header="Building attuali" style="min-width: 260px;">
-        <template #body="{ data }">
-          <div v-if="(data.buildingIds || []).length === 0" class="text-muted">—</div>
-          <div v-else class="d-flex flex-wrap gap-1">
-            <Tag
-              v-for="bid in data.buildingIds"
-              :key="String(bid)"
-              :value="buildingNameById(bid)"
-              severity="info"
-            />
-          </div>
-        </template>
-      </Column>
-
-      <Column header="Nuova assegnazione" style="min-width: 340px;">
-        <template #body="{ data }">
-          <div class="d-flex gap-2 align-items-center flex-wrap">
-            <Dropdown
-              v-model="buildingDraft[data._id]"
-              :options="buildingOptions"
-              optionLabel="label"
-              optionValue="value"
-              placeholder="Seleziona building"
-              class="w-18rem"
-              :disabled="data.status === 'pending'"
-            />
-
+          <template #footer>
+            <Button label="Annulla" class="p-button-text" :disabled="assignDialog.saving" @click="closeAssignDialog" />
             <Button
-              label="Aggiungi"
-              icon="pi pi-plus"
-              severity="secondary"
-              :disabled="data.status === 'pending' || !buildingDraft[data._id]"
-              :loading="rowBusy[data._id] === true"
-              @click="addBuilding(data)"
+              label="Conferma"
+              icon="pi pi-check"
+              size="small"
+              :loading="assignDialog.saving"
+              @click="confirmAssignBuildings"
             />
-
-            <Button
-              label="Sovrascrivi"
-              icon="pi pi-refresh"
-              severity="warning"
-              :disabled="data.status === 'pending' || !buildingDraft[data._id]"
-              :loading="rowBusy[data._id] === true"
-              @click="overwriteBuildings(data)"
-            />
-          </div>
-
-          <div v-if="data.status === 'pending'" class="text-muted small mt-1">
-            Non puoi assegnare building a utenti pending: prima devono essere approvati (status=active).
-          </div>
-        </template>
-      </Column>
-
-      <Column header="Rimuovi" style="width: 220px;">
-        <template #body="{ data }">
-          <Button
-            label="Svuota edifici"
-            icon="pi pi-trash"
-            severity="danger"
-            :disabled="data.status === 'pending' || (data.buildingIds || []).length === 0"
-            :loading="rowBusy[data._id] === true"
-            @click="clearBuildings(data)"
-          />
-        </template>
-      </Column>
-    </DataTable>
+          </template>
+        </Dialog>
+      </TabPanel>
+    </TabView>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { useToast } from "primevue/usetoast";
 import { useConfirm } from "primevue/useconfirm";
+import NoPermissions from "@/components/NoPermissions.vue";
+import { usePermissions } from "@/composables/usePermissions";
 
-import {
-  fetchUsersBuildings,
-  fetchAllBuildings,
-  updateUserBuildings,
-} from "@/services/userAdmin.service";
+import { fetchUsersBuildings, updateUserBuildings } from "@/services/userAdmin.service";
+import { fetchAllBuildings as fetchAllBuildingsAll } from "@/services/buildings.service";
+import { fetchRequests, updateRequestStatus } from "@/services/requests.service";
 
 const toast = useToast();
 const confirm = useConfirm();
+const { hasAny, hasPermission } = usePermissions();
+
+const canEnter = computed(() =>
+  hasAny(["users:building:view", "users:building:update", "requests:manage"])
+);
+const canManageRequests = computed(() => hasPermission("requests:manage"));
+const canManualAssign = computed(() => hasPermission("users:building:update"));
 
 const loading = ref(false);
 const globalFilter = ref("");
 
 const users = ref([]);
 const buildings = ref([]);
+const requests = ref([]);
 
-const buildingDraft = reactive({});
 const rowBusy = reactive({});
 
 const missing = ref(true);
 const missingOptions = [
-  { label: "Solo utenti senza building (missing=true)", value: true },
-  { label: "Tutti gli utenti (missing=false)", value: false },
+  { label: "Solo utenti senza edificio", value: true },
+  { label: "Tutti gli utenti", value: false },
 ];
 
-const status = ref("active");
-const statusOptions = [
-  { label: "Tutti", value: null },
-  { label: "Active", value: "active" },
-  { label: "Disabled", value: "disabled" },
-  { label: "Pending", value: "pending" },
-];
-
-function statusSeverity(st) {
-  if (st === "active") return "success";
-  if (st === "disabled") return "danger";
-  if (st === "pending") return "warning";
-  return "info";
-}
+const buildingOptions = computed(() =>
+  (buildings.value || [])
+    .map((b) => ({ label: b.name || b._id, value: String(b._id) }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+);
 
 function normalize(s) {
   return String(s || "").toLowerCase().trim();
 }
 
-const usersFiltered = computed(() => {
-  const q = normalize(globalFilter.value);
-  if (!q) return users.value;
-  return users.value.filter((u) => {
-    const hay = `${u.name} ${u.surname} ${u.email}`.toLowerCase();
-    return hay.includes(q);
-  });
-});
-
-const buildingOptions = computed(() =>
-  buildings.value.map((b) => ({
-    label: b.name || b.buildingName || b.title || b._id,
-    value: b._id,
-  }))
-);
+function statusSeverity(st) {
+  if (st === "active") return "success";
+  if (st === "disabled") return "danger";
+  if (st === "pending") return "warning";
+  if (st === "PENDING") return "warning";
+  if (st === "APPROVED") return "success";
+  if (st === "REJECTED") return "danger";
+  return "info";
+}
 
 function buildingNameById(id) {
   const s = String(id);
-  const found = buildings.value.find((b) => String(b._id) === s);
-  return found?.name || found?.buildingName || found?.title || s;
+  const found = (buildings.value || []).find((b) => String(b._id) === s);
+  return found?.name || s;
 }
 
 function setRowBusy(id, v) {
   rowBusy[id] = v;
 }
 
-async function reload() {
+function formatDateTime(d) {
+  if (!d) return "-";
+  try {
+    return new Date(d).toLocaleString("it-IT");
+  } catch {
+    return "-";
+  }
+}
+
+const usersFiltered = computed(() => {
+  const activeUsers = (users.value || []).filter((u) => u.status === "active");
+  const q = normalize(globalFilter.value);
+  if (!q) return activeUsers;
+  return activeUsers.filter((u) => normalize(`${u.name} ${u.surname} ${u.email}`).includes(q));
+});
+
+const requestsSorted = computed(() => {
+  return (requests.value || []).slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+});
+
+const assignDialog = reactive({
+  visible: false,
+  saving: false,
+  user: null,
+  selectedBuildingIds: [],
+});
+
+function openAssignDialog(evt) {
+  if (!canManualAssign.value) return;
+  const user = evt?.data;
+  if (!user) return;
+
+  assignDialog.user = user;
+  assignDialog.selectedBuildingIds = Array.isArray(user.buildingIds) ? user.buildingIds.map(String) : [];
+  assignDialog.visible = true;
+}
+
+function closeAssignDialog() {
+  assignDialog.visible = false;
+  assignDialog.saving = false;
+  assignDialog.user = null;
+  assignDialog.selectedBuildingIds = [];
+}
+
+async function confirmAssignBuildings() {
+  if (!assignDialog.user) return;
+
+  confirm.require({
+    message: `Confermare assegnazione edifici per ${assignDialog.user.email}?`,
+    header: "Conferma",
+    icon: "pi pi-exclamation-triangle",
+    acceptLabel: "Conferma",
+    rejectLabel: "Annulla",
+    accept: async () => {
+      assignDialog.saving = true;
+      try {
+        await updateUserBuildings(assignDialog.user._id, assignDialog.selectedBuildingIds);
+        toast.add({ severity: "success", summary: "Ok", detail: "Edifici assegnati", life: 2500 });
+        closeAssignDialog();
+        await reloadUsers();
+      } catch (err) {
+        toast.add({
+          severity: "error",
+          summary: "Errore",
+          detail: err?.response?.data?.message || "Operazione fallita",
+          life: 3500,
+        });
+      } finally {
+        assignDialog.saving = false;
+      }
+    },
+  });
+}
+
+/** RICHIESTE */
+async function reloadRequests() {
+  if (!canManageRequests.value) return;
+
+  try {
+    const res = await fetchRequests({ type: "ASSIGN_BUILDING", status: "PENDING" });
+    requests.value = Array.isArray(res.data) ? res.data : [];
+  } catch {
+    try {
+      const res2 = await fetchRequests();
+      requests.value = Array.isArray(res2.data) ? res2.data : [];
+    } catch (e2) {
+      console.error("Errore caricamento richieste:", e2);
+      requests.value = [];
+    }
+  }
+}
+
+function confirmAccept(req) {
+  confirm.require({
+    message: `Accettare la richiesta per ${req.userEmail || "utente"} su "${buildingNameById(req.buildingId)}"?`,
+    header: "Conferma",
+    icon: "pi pi-exclamation-triangle",
+    acceptLabel: "Accetta",
+    rejectLabel: "Annulla",
+    accept: async () => {
+      setRowBusy(req._id, true);
+      try {
+        await updateRequestStatus(req._id, "APPROVED");
+        toast.add({ severity: "success", summary: "Ok", detail: "Richiesta accettata", life: 2500 });
+        await reloadAll();
+      } catch (err) {
+        toast.add({
+          severity: "error",
+          summary: "Errore",
+          detail: err?.response?.data?.message || "Operazione fallita",
+          life: 3500,
+        });
+      } finally {
+        setRowBusy(req._id, false);
+      }
+    },
+  });
+}
+
+function confirmReject(req) {
+  confirm.require({
+    message: `Rifiutare la richiesta per ${req.userEmail || "utente"} su "${buildingNameById(req.buildingId)}"?`,
+    header: "Conferma",
+    icon: "pi pi-exclamation-triangle",
+    acceptLabel: "Rifiuta",
+    rejectLabel: "Annulla",
+    accept: async () => {
+      setRowBusy(req._id, true);
+      try {
+        await updateRequestStatus(req._id, "REJECTED");
+        toast.add({ severity: "success", summary: "Ok", detail: "Richiesta rifiutata", life: 2500 });
+        await reloadAll();
+      } catch (err) {
+        toast.add({
+          severity: "error",
+          summary: "Errore",
+          detail: err?.response?.data?.message || "Operazione fallita",
+          life: 3500,
+        });
+      } finally {
+        setRowBusy(req._id, false);
+      }
+    },
+  });
+}
+
+/** UTENTI */
+async function reloadUsers() {
+  const uRes = await fetchUsersBuildings({
+    missing: missing.value ? "true" : "false",
+    status: "active",
+  });
+  users.value = Array.isArray(uRes.data) ? uRes.data : [];
+}
+
+async function reloadBuildings() {
+  const bRes = await fetchAllBuildingsAll();
+  buildings.value = Array.isArray(bRes.data) ? bRes.data : [];
+}
+
+/** ENTRYPOINT */
+async function reloadAll() {
   loading.value = true;
   try {
-    const [bRes, uRes] = await Promise.all([
-      fetchAllBuildings(),
-      fetchUsersBuildings({
-        missing: missing.value ? "true" : "false",
-        ...(status.value ? { status: status.value } : {}),
-      }),
-    ]);
-
-    buildings.value = Array.isArray(bRes.data) ? bRes.data : [];
-    users.value = Array.isArray(uRes.data) ? uRes.data : [];
-
-    for (const u of users.value) {
-      if (!(u._id in buildingDraft)) buildingDraft[u._id] = "";
-    }
+    await Promise.all([reloadBuildings(), reloadUsers(), reloadRequests()]);
   } catch (err) {
     toast.add({
       severity: "error",
@@ -245,83 +447,7 @@ async function reload() {
   }
 }
 
-onMounted(reload);
-
-// ✅ ricarica automatico quando cambiano filtri
-watch([missing, status], async () => {
-  await reload();
+onMounted(() => {
+  reloadAll();
 });
-
-async function addBuilding(user) {
-  const bid = buildingDraft[user._id];
-  if (!bid) return;
-
-  const current = Array.isArray(user.buildingIds) ? user.buildingIds.map(String) : [];
-  const next = Array.from(new Set([...current, String(bid)]));
-
-  confirm.require({
-    message: `Aggiungere building a ${user.email}?`,
-    header: "Conferma",
-    icon: "pi pi-exclamation-triangle",
-    acceptLabel: "Conferma",
-    rejectLabel: "Annulla",
-    accept: async () => {
-      await saveBuildings(user, next);
-    },
-  });
-}
-
-async function overwriteBuildings(user) {
-  const bid = buildingDraft[user._id];
-  if (!bid) return;
-
-  confirm.require({
-    message: `Sovrascrivere i building di ${user.email} con: ${buildingNameById(bid)}?`,
-    header: "Conferma",
-    icon: "pi pi-exclamation-triangle",
-    acceptLabel: "Conferma",
-    rejectLabel: "Annulla",
-    accept: async () => {
-      await saveBuildings(user, [String(bid)]);
-    },
-  });
-}
-
-async function clearBuildings(user) {
-  confirm.require({
-    message: `Svuotare tutti i building associati a ${user.email}?`,
-    header: "Conferma",
-    icon: "pi pi-exclamation-triangle",
-    acceptLabel: "Svuota",
-    rejectLabel: "Annulla",
-    accept: async () => {
-      await saveBuildings(user, []);
-    },
-  });
-}
-
-async function saveBuildings(user, buildingIds) {
-  setRowBusy(user._id, true);
-  try {
-    await updateUserBuildings(user._id, buildingIds);
-
-    toast.add({
-      severity: "success",
-      summary: "Ok",
-      detail: "Edifici aggiornati",
-      life: 2500,
-    });
-
-    await reload();
-  } catch (err) {
-    toast.add({
-      severity: "error",
-      summary: "Errore",
-      detail: err?.response?.data?.message || "Errore aggiornamento edifici",
-      life: 3500,
-    });
-  } finally {
-    setRowBusy(user._id, false);
-  }
-}
 </script>

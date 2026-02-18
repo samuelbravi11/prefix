@@ -27,56 +27,17 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
-import axios from 'axios'
-import Dialog from 'primevue/dialog'
+import { onMounted, ref } from "vue";
+import api from "@/services/api";
 
-// Props per v-model
-const props = defineProps({ show: Boolean })
-const emit = defineEmits(['update:show'])
+const user = ref(null);
 
-// Ref locale sincronizzato con il genitore
-const showLocal = ref(props.show)
-watch(() => props.show, val => showLocal.value = val)
-watch(showLocal, val => emit('update:show', val))
-
-// Campi UserData
-const nome = ref('')
-const email = ref('')
-const surname = ref('')
-const status = ref('')
-const roleName = ref('')
-
-// Funzione per caricare dati utente
-const fetchUserData = async () => {
-    try {
-        const token = localStorage.getItem('accessToken')
-        const response = await axios.get('/api/v1/users/me', {
-            headers: { Authorization: `Bearer ${token}` }
-        })
-        const user = response.data.user
-        nome.value = user.name
-        surname.value = user.surname
-        email.value = user.email
-        status.value = user.status
-        roleName.value = user.roles?.[0]?.roleName || 'N/D'
-    } catch (err) {
-        console.error('Errore caricamento dati utente:', err)
-        alert('Impossibile caricare i dati utente')
-    }
-}
-
-// Quando il dialog si apre, fetchiamo i dati
-watch(showLocal, (val) => {
-    if (val) fetchUserData()
-})
-
-const formatRoleName = (role) => {
-    if (!role) return ''
-    // Sostituisci "_" con spazio e metti in maiuscolo la prima lettera di ogni parola
-    return role
-        .split('_')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ')
-}
+onMounted(async () => {
+  try {
+    const res = await api.get("/users/me");
+    user.value = res.data?.user || null;
+  } catch (e) {
+    user.value = null;
+  }
+});
 </script>

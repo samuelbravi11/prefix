@@ -9,48 +9,60 @@
                 <i class="bi bi-calendar-week me-2"></i>
                 Calendario Eventi
               </h5>
+
               <div class="d-flex align-items-center gap-2">
                 <span v-if="loading" class="text-muted">
                   <i class="bi bi-arrow-repeat me-2"></i>Caricamento...
                 </span>
-                <span v-if="selectedBuildingsStore.selectedIds.length > 0 && !loading" 
-                      class="text-muted">
-                  
+
+                <span
+                  v-if="selectedBuildingsStore.selectedIds.length > 0 && !loading"
+                  class="text-muted"
+                >
                   {{ getSelectedBuildingsText() }}
                 </span>
-                <Button 
+
+                <Button
                   v-if="allBuildings.length > 0"
-                  label="Cambia edifici" 
-                  icon="pi pi-building" 
+                  label="Cambia edifici"
+                  icon="pi pi-building"
                   size="small"
                   @click="goToBuildingsList"
                   :disabled="loading"
                 />
               </div>
             </div>
+
             <div class="card-body">
-              <FullCalendar
-                ref="calendarRef"
-                :options="calendarOptions"
-              />
+              <FullCalendar ref="calendarRef" :options="calendarOptions" />
             </div>
+
             <div class="card-footer text-muted small">
               <div v-if="allBuildings.length > 0 && selectedBuildingsStore.selectedIds.length > 0">
                 <div class="d-flex align-items-center mb-2">
-                  
                   <strong>Legenda edifici selezionati:</strong>
                 </div>
+
                 <div class="d-flex flex-wrap gap-2 mt-2">
-                  <div v-for="building in filteredBuildings" :key="building.id" class="d-flex align-items-center">
-                    <span class="color-dot me-1" :style="{ backgroundColor: getEventColor(building.id) }"></span>
+                  <div
+                    v-for="building in filteredBuildings"
+                    :key="building.id"
+                    class="d-flex align-items-center"
+                  >
+                    <span
+                      class="color-dot me-1"
+                      :style="{ backgroundColor: getEventColor(building.id) }"
+                    ></span>
                     <span>{{ building.name }}</span>
                   </div>
                 </div>
               </div>
+
               <div v-else-if="allBuildings.length > 0" class="text-center py-2">
                 <i class="bi bi-building me-1"></i>
                 Nessun edificio selezionato
               </div>
+
               <div v-else class="text-center py-2">
                 <i class="bi bi-hourglass-split me-1"></i>
                 Caricamento edifici...
@@ -64,196 +76,148 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, computed } from 'vue'
-import FullCalendar from '@fullcalendar/vue3'
-import dayGridPlugin from '@fullcalendar/daygrid'
-import timeGridPlugin from '@fullcalendar/timegrid'
-import interactionPlugin from '@fullcalendar/interaction'
-import bootstrapPlugin from '@fullcalendar/bootstrap'
-import axios from 'axios'
-import { useSelectedBuildingsStore } from '@/stores/selectedBuildings'
-import { useRouter } from 'vue-router'
-import Button from 'primevue/button'
+import { ref, onMounted, watch, computed } from "vue";
+import FullCalendar from "@fullcalendar/vue3";
+import dayGridPlugin from "@fullcalendar/daygrid";
+import timeGridPlugin from "@fullcalendar/timegrid";
+import interactionPlugin from "@fullcalendar/interaction";
+import bootstrapPlugin from "@fullcalendar/bootstrap";
+import api from "@/services/api";
+import { useSelectedBuildingsStore } from "@/stores/selectedBuildings";
+import { useRouter } from "vue-router";
+import Button from "primevue/button";
 
-// Router e store
-const router = useRouter()
-const selectedBuildingsStore = useSelectedBuildingsStore()
+const router = useRouter();
+const selectedBuildingsStore = useSelectedBuildingsStore();
 
-// Refs
-const loading = ref(false)
-const allBuildings = ref([])
-const calendarRef = ref(null)
+const loading = ref(false);
+const allBuildings = ref([]);
+const calendarRef = ref(null);
 
-// Computed
 const filteredBuildings = computed(() => {
-  return allBuildings.value.filter(b => 
-    selectedBuildingsStore.selectedIds.includes(b.id)
-  )
-})
+  return allBuildings.value.filter((b) => selectedBuildingsStore.selectedIds.includes(b.id));
+});
 
-// Token di autenticazione
-const token = localStorage.getItem('accessToken')
-
-// Testo per mostrare gli edifici selezionati
 const getSelectedBuildingsText = () => {
-  const selectedIds = selectedBuildingsStore.selectedIds
-  if (selectedIds.length === 0) return "Nessun edificio selezionato"
-  
-  const selectedBuildingsNames = filteredBuildings.value.map(b => b.name)
-  
-  if (selectedBuildingsNames.length === 0) return "Edifici selezionati non trovati"
-  
-  const truncated = selectedBuildingsNames.length > 2 
-    ? `${selectedBuildingsNames.slice(0, 2).join(', ')} e altri ${selectedBuildingsNames.length - 2}`
-    : selectedBuildingsNames.join(', ')
-  
-  return truncated
-}
+  const selectedIds = selectedBuildingsStore.selectedIds;
+  if (selectedIds.length === 0) return "Nessun edificio selezionato";
 
-// Vai alla lista edifici
-const goToBuildingsList = () => {
-  router.push('/buildings-list')
-}
+  const names = filteredBuildings.value.map((b) => b.name);
+  if (names.length === 0) return "Edifici selezionati non trovati";
 
-// Carica la lista completa degli edifici
+  return names.length > 2 ? `${names.slice(0, 2).join(", ")} e altri ${names.length - 2}` : names.join(", ");
+};
+
+const goToBuildingsList = () => router.push("/buildings-list");
+
 const fetchBuildings = async () => {
   try {
-    const response = await axios.get('/api/v1/buildings', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    })
-
-    allBuildings.value = response.data.map(b => ({
+    const response = await api.get("/buildings");
+    allBuildings.value = (response.data || []).map((b) => ({
       id: b._id,
       name: b.name,
       address: b.address,
-      city: b.city || 'N/D'
-    }))
+      city: b.city || "N/D",
+    }));
   } catch (err) {
-    console.error('Errore caricamento edifici:', err)
+    console.error("Errore caricamento edifici:", err);
   }
-}
+};
 
-// Funzione per caricare gli eventi dall'API
 const fetchEvents = async () => {
-  const selectedIds = selectedBuildingsStore.selectedIds
-  
+  const selectedIds = selectedBuildingsStore.selectedIds;
+
   if (selectedIds.length === 0) {
-    calendarOptions.events = []
+    calendarOptions.events = [];
     if (calendarRef.value?.getApi) {
-      calendarRef.value.getApi().removeAllEvents()
+      calendarRef.value.getApi().removeAllEvents();
     }
-    return
+    return;
   }
 
-  loading.value = true
+  loading.value = true;
   try {
-    const buildingIdsParam = selectedIds.map(id => encodeURIComponent(id)).join(',')
-    
-    const response = await axios.get(`/api/v1/events?buildingIds=${buildingIdsParam}&view=future`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    })
+    const response = await api.get(`/events`, {
+      params: {
+        buildingIds: selectedIds.join(","),
+        view: "future",
+      },
+    });
 
-    // Mappatura eventi
-    const events = response.data.map(event => {
-      const building = allBuildings.value.find(b => b.id === event.buildingId)
-      const buildingName = building ? building.name : `Edificio ${event.buildingId.substring(0, 6)}...`
-      const ruleCount = event.data?.dueRuleIds?.length || 0
-      
-      // Determina icona e titolo
-      let iconClass = 'bi-calendar-event'
-      let eventType = 'Evento'
-      
-      if (event.reason === 'rule_based') {
-        iconClass = 'bi-tools'
-        eventType = 'Manutenzione'
+    const events = (response.data || []).map((event) => {
+      const building = allBuildings.value.find((b) => b.id === event.buildingId);
+      const buildingName = building ? building.name : `Edificio ${String(event.buildingId).slice(0, 6)}...`;
+      const ruleCount = event.data?.dueRuleIds?.length || 0;
+
+      let iconClass = "bi-calendar-event";
+      let eventType = "Evento";
+      if (event.reason === "rule_based") {
+        iconClass = "bi-tools";
+        eventType = "Manutenzione";
       }
-      
-      const title = `${eventType}: ${buildingName}`
-      
+
+      const title = `${eventType}: ${buildingName}`;
+
       return {
         id: event._id,
-        title: title,
+        title,
         start: event.scheduledAt,
         end: event.scheduledAt,
         buildingId: event.buildingId,
-        buildingName: buildingName,
+        buildingName,
         reason: event.reason,
         status: event.status,
         color: getEventColor(event.buildingId),
         extendedProps: {
           building: buildingName,
-          description: event.data?.explanation || 'Nessuna descrizione disponibile',
+          description: event.data?.explanation || "Nessuna descrizione disponibile",
           reason: event.reason,
           status: event.status,
-          scheduledAt: new Date(event.scheduledAt).toLocaleString('it-IT'),
-          ruleCount: ruleCount,
+          scheduledAt: new Date(event.scheduledAt).toLocaleString("it-IT"),
+          ruleCount,
           assetId: event.assetId,
-          iconClass: iconClass,
-          eventType: eventType
-        }
-      }
-    })
+          iconClass,
+          eventType,
+        },
+      };
+    });
 
-    // Ordina per data
-    events.sort((a, b) => new Date(a.start) - new Date(b.start))
-    
-    // Aggiorna eventi del calendario
-    calendarOptions.events = events
-    
-    // Refresh calendario
+    events.sort((a, b) => new Date(a.start) - new Date(b.start));
+
+    calendarOptions.events = events;
+
     if (calendarRef.value?.getApi) {
-      const calendarApi = calendarRef.value.getApi()
-      calendarApi.removeAllEvents()
-      events.forEach(event => calendarApi.addEvent(event))
+      const calendarApi = calendarRef.value.getApi();
+      calendarApi.removeAllEvents();
+      events.forEach((e) => calendarApi.addEvent(e));
     }
-    
   } catch (err) {
-    console.error('Errore caricamento eventi:', err)
-    alert('Impossibile caricare gli eventi')
+    console.error("Errore caricamento eventi:", err);
+    alert("Impossibile caricare gli eventi");
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
-// Funzione per generare colori
 const getEventColor = (buildingId) => {
-  if (!buildingId) return '#0d6efd'
-  
-  const colors = [
-    '#0d6efd', // primary
-    '#6f42c1', // purple
-    '#d63384', // pink
-    '#fd7e14', // orange
-    '#198754', // success
-    '#dc3545', // danger
-    '#0dcaf0', // info
-    '#20c997', // teal
-    '#ffc107', // warning
-    '#6c757d', // secondary
-  ]
-  
-  const hash = buildingId.split('').reduce((acc, char) => {
-    return char.charCodeAt(0) + ((acc << 5) - acc)
-  }, 0)
-  
-  return colors[Math.abs(hash) % colors.length]
-}
+  if (!buildingId) return "#0d6efd";
 
-// Configurazione del calendario
+  const colors = ["#0d6efd", "#6f42c1", "#d63384", "#fd7e14", "#198754", "#dc3545", "#0dcaf0", "#20c997", "#ffc107", "#6c757d"];
+  const hash = String(buildingId)
+    .split("")
+    .reduce((acc, char) => char.charCodeAt(0) + ((acc << 5) - acc), 0);
+
+  return colors[Math.abs(hash) % colors.length];
+};
+
 const calendarOptions = {
   plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin, bootstrapPlugin],
-  initialView: 'dayGridMonth',
-  themeSystem: 'bootstrap5',
+  initialView: "dayGridMonth",
+  themeSystem: "bootstrap5",
   headerToolbar: {
-    left: 'prev,next today',
-    center: 'title',
-    right: 'dayGridMonth,timeGridWeek,timeGridDay'
+    left: "prev,next today",
+    center: "title",
+    right: "dayGridMonth,timeGridWeek,timeGridDay",
   },
   events: [],
   editable: false,
@@ -261,75 +225,71 @@ const calendarOptions = {
   navLinks: true,
   height: 650,
   eventClick: (info) => {
-    const event = info.event
-    const ext = event.extendedProps
-    
-    // Costruisci dettagli con Bootstrap Icons come testo
+    const event = info.event;
+    const ext = event.extendedProps;
+
     const details = [
       `${event.title}`,
       `Edificio: ${ext.building}`,
       `Data: ${ext.scheduledAt}`,
       `Descrizione: ${ext.description}`,
-      `Stato: ${ext.status}`
-    ].filter(line => line !== null).join('\n')
-    
-    alert(details)
+      `Stato: ${ext.status}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    alert(details);
   },
   dayCellDidMount: (args) => {
-    const today = new Date()
+    const today = new Date();
     if (
       args.date.getFullYear() === today.getFullYear() &&
       args.date.getMonth() === today.getMonth() &&
       args.date.getDate() === today.getDate()
     ) {
-      args.el.style.backgroundColor = '#e6f7ff'
+      args.el.style.backgroundColor = "#e6f7ff";
     }
   },
   eventDidMount: (info) => {
-    const event = info.event
-    const ext = event.extendedProps
-    
-    const tooltip = `${event.title}\nEdificio: ${ext.building}\nData: ${ext.scheduledAt}`
-    info.el.setAttribute('title', tooltip)
-    
-    if (ext.reason === 'rule_based') {
-      info.el.style.borderLeft = '4px solid #dc3545'
+    const event = info.event;
+    const ext = event.extendedProps;
+
+    const tooltip = `${event.title}\nEdificio: ${ext.building}\nData: ${ext.scheduledAt}`;
+    info.el.setAttribute("title", tooltip);
+
+    if (ext.reason === "rule_based") {
+      info.el.style.borderLeft = "4px solid #dc3545";
     }
   },
-  locale: 'it',
+  locale: "it",
   buttonText: {
-    today: 'Oggi',
-    month: 'Mese',
-    week: 'Settimana',
-    day: 'Giorno'
+    today: "Oggi",
+    month: "Mese",
+    week: "Settimana",
+    day: "Giorno",
   },
   nowIndicator: true,
   slotLabelFormat: {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  }
-}
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  },
+};
 
-// Watch per cambiamenti edifici selezionati
-watch(() => [...selectedBuildingsStore.selectedIds], () => {
-  fetchEvents()
-}, { deep: true })
+watch(
+  () => [...selectedBuildingsStore.selectedIds],
+  () => fetchEvents(),
+  { deep: true }
+);
 
-// Carica edifici e eventi al mount
 onMounted(async () => {
-  await fetchBuildings()
-  fetchEvents()
-})
+  await fetchBuildings();
+  fetchEvents();
+});
 
-// Funzione per aggiornare manualmente
-const refreshEvents = () => {
-  fetchEvents()
-}
+const refreshEvents = () => fetchEvents();
 
-defineExpose({
-  refreshEvents
-})
+defineExpose({ refreshEvents });
 </script>
 
 <style scoped>
@@ -345,7 +305,6 @@ defineExpose({
   margin-right: 4px;
 }
 
-/* Stili per il calendario */
 :deep(.fc-event) {
   cursor: pointer;
   transition: transform 0.2s;
@@ -353,7 +312,7 @@ defineExpose({
 
 :deep(.fc-event:hover) {
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 :deep(.fc-day-today) {

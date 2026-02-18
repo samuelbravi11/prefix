@@ -1,0 +1,50 @@
+/* Header standard moduli */
+.module-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.module-header h4 {
+  margin-bottom: 0.25rem;
+}
+
+.module-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.module-section {
+  padding: 1.5rem 0;
+}
+
+/* Uniforma bottoni reload */
+.p-button.p-button-text.reload-btn {
+  font-weight: 500;
+}
+
+/* Spaziatura tra sezioni dentro moduli generici */
+.generic-section {
+  padding: 2rem 0;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+
+.generic-section:last-child {
+  border-bottom: none;
+}
+
+/* Settings più larga */
+.settings-dialog .p-dialog-content {
+  padding: 2rem;
+}
+
+.settings-dialog .p-dialog {
+  width: 900px !important;
+  max-width: 96vw !important;
+}

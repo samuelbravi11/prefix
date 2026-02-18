@@ -13,8 +13,12 @@ import eventRoutes from "./routes/event.routes.js";
 import interventionRoutes from "./routes/intervention.routes.js";
 import assetRoutes from "./routes/asset.routes.js";
 import ruleRoutes from "./routes/rule.routes.js";
+import roleRoutes from "./routes/role.routes.js";
 // import calendarRoutes from "./routes/calendar.routes.js";
 import tenantProvisionRoutes from "./routes/tenantProvision.routes.js"
+
+import preferencesRoutes from "./routes/preferences.routes.js";
+import schedulerRoutes from "./routes/scheduler.routes.js";
 
 import requestLogger from "./middleware/apiLogger.middleware.js";
 import rbacDecisionController from "./controllers/rbacDecision.controller.js";
@@ -131,6 +135,13 @@ app.use("/api/v1/interventions", interventionRoutes);
 // app.use("/api/v1/calendar", calendarRoutes);
 app.use("/api/v1/assets", assetRoutes);
 app.use("/api/v1/rules", ruleRoutes);
+
+// roles + permissions
+app.use("/api/v1", roleRoutes);
+
+// preferences + manual triggers (MVP)
+app.use("/api/v1/preferences", preferencesRoutes);
+app.use("/api/v1/scheduler", schedulerRoutes);
 
 
 export default app;

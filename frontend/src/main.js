@@ -8,6 +8,7 @@ import App from "./App.vue";
 import router from "./router";
 
 import PrimeVue from "@/plugins/primevue";
+import "@/assets/styles/layout-fixes.css";
 
 import "primevue/resources/themes/lara-light-blue/theme.css";
 import "primevue/resources/primevue.css";

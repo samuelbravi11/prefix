@@ -23,6 +23,7 @@ export const PERMISSION_MAP = {
 
   // Notifiche
   "GET /api/v1/notifications": "notifications:view",
+  "GET /api/v1/notifications/unread-count": "notifications:view",
   "PATCH /api/v1/notifications/:id/read": "notifications:view",
   "PATCH /api/v1/notifications/read-all": "notifications:view",
 

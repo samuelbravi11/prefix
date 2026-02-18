@@ -39,7 +39,7 @@
                       class="badge"
                       :class="isOpenNow(slotProps.data.openingHours) ? 'bg-success' : 'bg-secondary'"
                     >
-                      {{ isOpenNow(slotProps.data.openingHours) ? 'Aperto' : 'Chiuso' }}
+                      {{ isOpenNow(slotProps.data.openingHours) ? "Aperto" : "Chiuso" }}
                     </span>
                   </template>
                 </Column>
@@ -53,70 +53,55 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import axios from 'axios'
-import DataTable from 'primevue/datatable'
-import Column from 'primevue/column'
-import Button from 'primevue/button'
-import { useRouter } from 'vue-router'
+import { ref, onMounted } from "vue";
+import api from "@/services/api";
+import DataTable from "primevue/datatable";
+import Column from "primevue/column";
+import Button from "primevue/button";
+import { useRouter } from "vue-router";
+import { useSelectedBuildingsStore } from "@/stores/selectedBuildings";
 
-// 👉 PINIA STORE
-import { useSelectedBuildingsStore } from '@/stores/selectedBuildings'
+const router = useRouter();
+const selectedBuildingsStore = useSelectedBuildingsStore();
 
-const router = useRouter()
-const selectedBuildingsStore = useSelectedBuildingsStore()
-
-const token = localStorage.getItem('accessToken')
-
-const buildings = ref([])
-const selectedBuildings = ref([])
+const buildings = ref([]);
+const selectedBuildings = ref([]);
 
 const fetchBuildings = async () => {
   try {
-    const response = await axios.get('/api/v1/buildings', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    })
-
-    buildings.value = response.data.map(b => ({
+    const response = await api.get("/buildings");
+    buildings.value = (response.data || []).map((b) => ({
       id: b._id,
       name: b.name,
       address: b.address,
-      city: b.city || 'N/D',
-      openingHours: b.openingHours
-    }))
+      city: b.city || "N/D",
+      openingHours: b.openingHours,
+    }));
   } catch (err) {
-    console.error('Errore caricamento edifici:', err)
-    alert('Impossibile caricare la lista edifici')
+    console.error("Errore caricamento edifici:", err);
+    alert("Impossibile caricare la lista edifici");
   }
-}
+};
 
-onMounted(fetchBuildings)
+onMounted(fetchBuildings);
 
 const onVisualizza = () => {
-  // estraggo solo gli ID
-  const ids = selectedBuildings.value.map(b => b.id)
-
-  // salvo nello store globale
-  selectedBuildingsStore.setSelectedBuildings(ids)
-
-  // opzionale: vai subito alla dashboard
-  router.push('/dashboard')
-}
+  const ids = selectedBuildings.value.map((b) => b.id);
+  selectedBuildingsStore.setSelectedBuildings(ids);
+  router.push("/dashboard");
+};
 
 const isOpenNow = (openingHours = {}) => {
-  const now = new Date()
-  const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
-  const today = dayMap[now.getDay()]
+  const now = new Date();
+  const dayMap = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  const today = dayMap[now.getDay()];
 
-  const intervals = openingHours[today] || []
-  if (!intervals.length) return false
+  const intervals = openingHours[today] || [];
+  if (!intervals.length) return false;
 
-  const currentTime = now.toTimeString().slice(0, 5)
-  return intervals.some(([start, end]) => start <= currentTime && currentTime <= end)
-}
+  const currentTime = now.toTimeString().slice(0, 5);
+  return intervals.some(([start, end]) => start <= currentTime && currentTime <= end);
+};
 </script>
 
 <style scoped>

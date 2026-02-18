@@ -25,10 +25,7 @@
     <div class="card-body ps-5">
       <!-- Selettore periodo -->
       <div class="mb-4">
-        <SelezioneMesi
-          :selected="selectedPeriod"
-          @periodSelected="changePeriod"
-        />
+        <SelezioneMesi :selected="selectedPeriod" @periodSelected="changePeriod" />
       </div>
 
       <!-- KPI Totali -->
@@ -58,7 +55,7 @@
       <h6 class="fw-semibold text-uppercase text-muted mb-3">
         <i class="bi bi-list-task me-2"></i>Tipologie di intervento
       </h6>
-      
+
       <div class="row mb-4">
         <div v-for="item in interventionTypes" :key="item.key" class="col-md-3 mb-3">
           <div class="card border h-100">
@@ -71,8 +68,8 @@
               </div>
               <h4 class="fw-bold mb-2">{{ kpi[item.key] }}</h4>
               <div class="progress" style="height: 6px;">
-                <div 
-                  :class="['progress-bar', item.bgClass.replace('bg-opacity-10', '')]" 
+                <div
+                  :class="['progress-bar', item.bgClass.replace('bg-opacity-10', '')]"
                   :style="{ width: calculatePercentage(kpi[item.key], kpi.total) + '%' }"
                 ></div>
               </div>
@@ -88,7 +85,7 @@
       <h6 class="fw-semibold text-uppercase text-muted mb-3">
         <i class="bi bi-shield-exclamation me-2"></i>Livelli di rischio
       </h6>
-      
+
       <div class="row">
         <div v-for="risk in riskLevels" :key="risk.key" class="col-md-4 mb-3">
           <div class="card border h-100">
@@ -102,8 +99,8 @@
               <h4 class="fw-bold mb-2">{{ kpi[risk.key] }}</h4>
               <div class="d-flex align-items-center">
                 <div class="progress flex-grow-1 me-2" style="height: 8px;">
-                  <div 
-                    :class="['progress-bar', risk.bgClass.replace('bg-opacity-10', '')]" 
+                  <div
+                    :class="['progress-bar', risk.bgClass.replace('bg-opacity-10', '')]"
                     :style="{ width: calculatePercentage(kpi[risk.key], kpi.total) + '%' }"
                   ></div>
                 </div>
@@ -127,11 +124,7 @@
             </span>
             <span v-else>Dati aggiornati alle {{ lastUpdate }}</span>
           </div>
-          <button 
-            @click="fetchKpi" 
-            class="btn btn-sm btn-outline-primary"
-            :disabled="loading"
-          >
+          <button @click="fetchKpi" class="btn btn-sm btn-outline-primary" :disabled="loading">
             <i class="bi bi-arrow-clockwise me-1"></i>
             Aggiorna
           </button>
@@ -142,89 +135,92 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, onMounted, computed } from 'vue'
-import axios from 'axios'
-import SelezioneMesi from './SelezioneMesi.vue'
-import { useSelectedBuildingsStore } from '@/stores/selectedBuildings'
+import { ref, reactive, watch, onMounted, computed } from "vue";
+import api from "@/services/api";
+import SelezioneMesi from "./SelezioneMesi.vue";
+import { useSelectedBuildingsStore } from "@/stores/selectedBuildings";
 
-const selectedPeriod = ref('anno')
-const loading = ref(false)
-const lastUpdate = ref('')
+const selectedPeriod = ref("anno");
+const loading = ref(false);
+const lastUpdate = ref("");
 
 const kpi = reactive({
-  total: 0, maintenance: 0, inspection: 0, repair: 0, failure: 0,
-  lowRisk: 0, mediumRisk: 0, highRisk: 0
-})
+  total: 0,
+  maintenance: 0,
+  inspection: 0,
+  repair: 0,
+  failure: 0,
+  lowRisk: 0,
+  mediumRisk: 0,
+  highRisk: 0,
+});
 
-const selectedBuildingsStore = useSelectedBuildingsStore()
-const token = localStorage.getItem('accessToken')
+const selectedBuildingsStore = useSelectedBuildingsStore();
 
-// Configurazioni
 const periods = [
-  { value: 'mese', label: 'Mese' },
-  { value: 'trimestre', label: 'Trimestre' },
-  { value: 'anno', label: 'Anno' }
-]
+  { value: "mese", label: "Mese" },
+  { value: "trimestre", label: "Trimestre" },
+  { value: "anno", label: "Anno" },
+];
 
 const interventionTypes = [
-  { key: 'maintenance', label: 'Manutenzione', icon: 'bi-tools', 
-    bgClass: 'bg-primary bg-opacity-10', textClass: 'text-primary' },
-  { key: 'inspection', label: 'Ispezione', icon: 'bi-search', 
-    bgClass: 'bg-info bg-opacity-10', textClass: 'text-info' },
-  { key: 'repair', label: 'Riparazione', icon: 'bi-wrench', 
-    bgClass: 'bg-warning bg-opacity-10', textClass: 'text-warning' },
-  { key: 'failure', label: 'Guasto', icon: 'bi-exclamation-triangle', 
-    bgClass: 'bg-danger bg-opacity-10', textClass: 'text-danger' }
-]
+  { key: "maintenance", label: "Manutenzione", icon: "bi-tools", bgClass: "bg-primary bg-opacity-10", textClass: "text-primary" },
+  { key: "inspection", label: "Ispezione", icon: "bi-search", bgClass: "bg-info bg-opacity-10", textClass: "text-info" },
+  { key: "repair", label: "Riparazione", icon: "bi-wrench", bgClass: "bg-warning bg-opacity-10", textClass: "text-warning" },
+  { key: "failure", label: "Guasto", icon: "bi-exclamation-triangle", bgClass: "bg-danger bg-opacity-10", textClass: "text-danger" },
+];
 
 const riskLevels = [
-  { key: 'lowRisk', label: 'Rischio Basso', icon: 'bi-shield-check', 
-    bgClass: 'bg-success bg-opacity-10', textClass: 'text-success' },
-  { key: 'mediumRisk', label: 'Rischio Medio', icon: 'bi-shield', 
-    bgClass: 'bg-warning bg-opacity-10', textClass: 'text-warning' },
-  { key: 'highRisk', label: 'Rischio Alto', icon: 'bi-shield-exclamation', 
-    bgClass: 'bg-danger bg-opacity-10', textClass: 'text-danger' }
-]
+  { key: "lowRisk", label: "Rischio Basso", icon: "bi-shield-check", bgClass: "bg-success bg-opacity-10", textClass: "text-success" },
+  { key: "mediumRisk", label: "Rischio Medio", icon: "bi-shield", bgClass: "bg-warning bg-opacity-10", textClass: "text-warning" },
+  { key: "highRisk", label: "Rischio Alto", icon: "bi-shield-exclamation", bgClass: "bg-danger bg-opacity-10", textClass: "text-danger" },
+];
 
-// Computed
-const buildingCount = computed(() => selectedBuildingsStore.selectedIds?.length || 0)
+const buildingCount = computed(() => selectedBuildingsStore.selectedIds?.length || 0);
 
-// Funzioni
 function mapPeriod(period) {
-  return { mese: 'month', trimestre: 'quarter', anno: 'year' }[period] || 'year'
+  return { mese: "month", trimestre: "quarter", anno: "year" }[period] || "year";
 }
 
 function getPeriodLabel(period) {
-  return periods.find(p => p.value === period)?.label || 'Anno'
+  return periods.find((p) => p.value === period)?.label || "Anno";
 }
 
 function calculatePercentage(part, total) {
-  return !total ? 0 : Math.round((part / total) * 100)
+  return !total ? 0 : Math.round((part / total) * 100);
 }
 
 function updateTimestamp() {
-  lastUpdate.value = new Date().toLocaleTimeString('it-IT', { 
-    hour: '2-digit', minute: '2-digit' 
-  })
+  lastUpdate.value = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+}
+
+function resetKpi() {
+  Object.assign(kpi, {
+    total: 0,
+    maintenance: 0,
+    inspection: 0,
+    repair: 0,
+    failure: 0,
+    lowRisk: 0,
+    mediumRisk: 0,
+    highRisk: 0,
+  });
+  updateTimestamp();
 }
 
 async function fetchKpi() {
-  const buildingIds = selectedBuildingsStore.selectedIds
-  if (!buildingIds?.length) return resetKpi()
+  const buildingIds = selectedBuildingsStore.selectedIds;
+  if (!buildingIds?.length) return resetKpi();
 
-  loading.value = true
+  loading.value = true;
   try {
-    const response = await axios.get('/api/v1/dashboard/stats', {
-      headers: { Authorization: `Bearer ${token}` },
-      params: {
-        period: mapPeriod(selectedPeriod.value),
-        buildingIds: buildingIds.join(',')
-      }
-    })
+    const response = await api.get("/dashboard/stats", {
+      params: { period: mapPeriod(selectedPeriod.value), buildingIds: buildingIds.join(",") },
+    });
 
-    const totals = response.data.totals || {}
-    const byType = totals.byType || {}
-    const bySeverity = totals.bySeverity || {}
+    const totals = response.data.totals || {};
+    const byType = totals.byType || {};
+    const bySeverity = totals.bySeverity || {};
 
     Object.assign(kpi, {
       total: totals.total || 0,
@@ -234,32 +230,29 @@ async function fetchKpi() {
       failure: byType.failure || 0,
       lowRisk: bySeverity.low || 0,
       mediumRisk: bySeverity.medium || 0,
-      highRisk: bySeverity.high || 0
-    })
+      highRisk: bySeverity.high || 0,
+    });
 
-    updateTimestamp()
+    updateTimestamp();
   } catch (error) {
-    console.error('Errore caricamento KPI:', error)
-    resetKpi()
+    console.error("Errore caricamento KPI:", error);
+    resetKpi();
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
-function resetKpi() {
-  Object.assign(kpi, {
-    total: 0, maintenance: 0, inspection: 0, repair: 0, failure: 0,
-    lowRisk: 0, mediumRisk: 0, highRisk: 0
-  })
-  updateTimestamp()
-}
-
 function changePeriod(period) {
-  selectedPeriod.value = period
-  fetchKpi()
+  selectedPeriod.value = period;
+  fetchKpi();
 }
 
-// Watch & Mounted
-watch(() => selectedBuildingsStore.selectedIds, fetchKpi, { deep: true })
-onMounted(fetchKpi)
+watch(() => selectedBuildingsStore.selectedIds, fetchKpi, { deep: true });
+onMounted(fetchKpi);
 </script>
+
+<style scoped>
+.badge { border-radius: 20px; padding: 5px 10px; font-size: 0.85em; }
+.btn-sm { border-radius: 8px; }
+.card { border-radius: 12px; }
+</style>

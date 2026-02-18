@@ -1,44 +1,75 @@
 <template>
   <div class="d-flex flex-column vh-100 text-white overflow-auto flex-shrink-0 sidebar-container">
-
-    <!-- Contenitore principale con flex-grow per spingere il pulsante in basso -->
     <div class="flex-grow-1 d-flex flex-column">
-
-      <!-- Barra vuota all'altezza della navbar -->
+      <!-- Header -->
       <nav class="navbar p-0 mb-3 py-4 d-flex justify-content-center align-items-center sidebar-header">
         <h4 class="text-white navbar-brand mb-0 h5">PreFix</h4>
       </nav>
 
-      <!-- Titolo Quick Access -->
+      <!-- Quick Access -->
       <ul class="nav flex-column mt-4">
         <li class="nav-item mb-2 px-3">
           <h6 class="text-uppercase small fw-semibold mb-0">Quick Access</h6>
         </li>
       </ul>
 
-      <!-- Lista link route principali -->
       <ul class="nav flex-column mt-0 sidebar-menu">
         <li class="nav-item">
-          <router-link to="/dashboard" class="nav-link sidebar-link" active-class="active-link"
-            exact-active-class="active-link" @click="setPageTitle('Dashboard')">
+          <router-link
+            to="/home"
+            class="nav-link sidebar-link"
+            active-class="active-link"
+            exact-active-class="active-link"
+            @click="setPageTitle('Quick Access')"
+          >
+            <div class="d-flex align-items-center">
+              <i class="bi bi-grid icon-azure me-3 flex-shrink-0"></i>
+              <span class="sidebar-text">Home</span>
+            </div>
+          </router-link>
+        </li>
+
+        <!-- Dashboard (generica) -->
+        <li v-if="can('dashboard:view')" class="nav-item">
+          <router-link
+            to="/dashboard"
+            class="nav-link sidebar-link"
+            active-class="active-link"
+            exact-active-class="active-link"
+            @click="setPageTitle('Dashboard')"
+          >
             <div class="d-flex align-items-center">
               <i class="bi bi-bar-chart icon-azure me-3 flex-shrink-0"></i>
               <span class="sidebar-text">Dashboard</span>
             </div>
           </router-link>
         </li>
-        <li class="nav-item">
-          <router-link to="/calendar" class="nav-link sidebar-link" active-class="active-link" exact-active-class="active-link"
-            @click="setPageTitle('Calendario Interventi')">
+
+        <!-- Calendario interventi (specifica) -->
+        <li v-if="can('events:view')" class="nav-item">
+          <router-link
+            to="/calendar"
+            class="nav-link sidebar-link"
+            active-class="active-link"
+            exact-active-class="active-link"
+            @click="setPageTitle('Calendario Interventi')"
+          >
             <div class="d-flex align-items-center">
               <i class="bi bi-calendar-event icon-azure me-3 flex-shrink-0"></i>
               <span class="sidebar-text">Calendario Interventi</span>
             </div>
           </router-link>
         </li>
-        <li class="nav-item">
-          <router-link to="/buildings-list" class="nav-link sidebar-link" active-class="active-link"
-            exact-active-class="active-link" @click="setPageTitle('Edifici affidati')">
+
+        <!-- Seleziona edifici associati (specifica) -->
+        <li v-if="can('buildings:view_associated')" class="nav-item">
+          <router-link
+            to="/buildings-list"
+            class="nav-link sidebar-link"
+            active-class="active-link"
+            exact-active-class="active-link"
+            @click="setPageTitle('Edifici affidati')"
+          >
             <div class="d-flex align-items-center">
               <i class="pi pi-building icon-azure me-3 flex-shrink-0"></i>
               <span class="sidebar-text">Seleziona Edifici</span>
@@ -46,7 +77,30 @@
           </router-link>
         </li>
 
-        <li class="nav-item">
+        <!-- Oggetti & Regole (generica) -->
+        <li
+          v-if="canAny(['assets:view','assets:manage','assets:create','rules:view','rules:manage','rules:create'])"
+          class="nav-item"
+        >
+          <router-link
+            to="/oggetti-regole"
+            class="nav-link sidebar-link"
+            active-class="active-link"
+            exact-active-class="active-link"
+            @click="setPageTitle('Oggetti & Regole')"
+          >
+            <div class="d-flex align-items-center">
+              <i class="bi bi-box-seam icon-azure me-3 flex-shrink-0"></i>
+              <span class="sidebar-text">Oggetti & Regole</span>
+            </div>
+          </router-link>
+        </li>
+
+        <!-- Gestione utenti (generica - include anche Ruoli) -->
+        <li
+          v-if="canAny(['users:manage','users:status:update','users:role:update','requests:manage','users:info:view','roles:manage'])"
+          class="nav-item"
+        >
           <router-link
             to="/gestione-utenti"
             class="nav-link sidebar-link"
@@ -61,76 +115,296 @@
           </router-link>
         </li>
 
-        <li class="nav-item">
+        <!-- Gestione edifici (generica) -->
+        <li v-if="canAny(['buildings:view_all','buildings:view','buildings:manage','buildings:create'])" class="nav-item">
           <router-link
-            to="/assegna-edifici"
+            to="/gestione-edifici"
             class="nav-link sidebar-link"
             active-class="active-link"
             exact-active-class="active-link"
-            @click="setPageTitle('Assegna edifici')"
+            @click="setPageTitle('Gestione Edifici')"
           >
             <div class="d-flex align-items-center">
               <i class="bi bi-building icon-azure me-3 flex-shrink-0"></i>
-              <span class="sidebar-text">Assegna edifici</span>
+              <span class="sidebar-text">Gestione edifici</span>
+            </div>
+          </router-link>
+        </li>
+
+        <!-- Interventi (generica) -->
+        <li v-if="canAny(['interventions:view','interventions:create','interventions:bulk_upload','interventions:manage'])" class="nav-item">
+          <router-link
+            to="/interventi"
+            class="nav-link sidebar-link"
+            active-class="active-link"
+            exact-active-class="active-link"
+            @click="setPageTitle('Interventi')"
+          >
+            <div class="d-flex align-items-center">
+              <i class="bi bi-clipboard-check icon-azure me-3 flex-shrink-0"></i>
+              <span class="sidebar-text">Interventi</span>
             </div>
           </router-link>
         </li>
       </ul>
 
-      <!-- Titolo Sede -->
-      <ul class="nav flex-column mt-4">
-        <li class="nav-item mb-2 px-3">
-          <h6 class="text-uppercase small fw-semibold mb-0">visualizzazioni</h6>
-        </li>
-      </ul>
+      <!-- Visualizzazioni: SOLO se siamo in una pagina "generica" -->
+      <template v-if="showVisualizzazioni">
+        <ul class="nav flex-column mt-4">
+          <li class="nav-item mb-2 px-3">
+            <h6 class="text-uppercase small fw-semibold mb-0">visualizzazioni</h6>
+          </li>
+        </ul>
 
-      <!-- Lista link grafici con scroll -->
-      <ul class="nav flex-column mt-0 sidebar-menu">
-        <li class="nav-item">
-          <a href="#pannello-riepilogativo" class="nav-link sidebar-link"
-            :class="{ 'active-link': activeLink === 'pannello-riepilogativo' }"
-            @click.prevent="goToGraph('pannello-riepilogativo')">
-            <div class="d-flex align-items-center">
-              <i class="bi bi-clipboard-data icon-azure me-3 flex-shrink-0"></i>
-              <span class="sidebar-text">Pannello Riepilogativo</span>
-            </div>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="#grafico-linee" class="nav-link sidebar-link" :class="{ 'active-link': activeLink === 'grafico-linee' }"
-            @click.prevent="goToGraph('grafico-linee')">
-            <div class="d-flex align-items-center">
-              <i class="bi bi-graph-up icon-azure me-3 flex-shrink-0"></i>
-              <span class="sidebar-text">Grafico a linee</span>
-            </div>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a href="#grafico-torta" class="nav-link sidebar-link" :class="{ 'active-link': activeLink === 'grafico-torta' }"
-            @click.prevent="goToGraph('grafico-torta')">
-            <div class="d-flex align-items-center">
-              <i class="bi bi-pie-chart icon-azure me-3 flex-shrink-0"></i>
-              <span class="sidebar-text">Grafico a torta</span>
-            </div>
-          </a>
-        </li>
-        <li class="nav-item">
-          <router-link to="/visualizzazione-tabellare" class="nav-link sidebar-link" active-class="active-link"
-            exact-active-class="active-link" @click="setPageTitle('Visualizzazione Tabellare')">
-            <div class="d-flex align-items-center">
-              <i class="bi bi-table icon-azure me-3 flex-shrink-0"></i>
-              <span class="sidebar-text">Visualizzazione Tabellare</span>
-            </div>
-          </router-link>
-        </li>
-      </ul>
+        <ul class="nav flex-column mt-0 sidebar-menu">
+          <!-- DASHBOARD -->
+          <template v-if="route.path === '/dashboard' && can('dashboard:view')">
+            <li class="nav-item">
+              <a
+                href="#pannello-riepilogativo"
+                class="nav-link sidebar-link"
+                :class="{ 'active-link': activeLink === 'pannello-riepilogativo' }"
+                @click.prevent="goToGraph('pannello-riepilogativo')"
+              >
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-clipboard-data icon-azure me-3 flex-shrink-0"></i>
+                  <span class="sidebar-text">Pannello</span>
+                </div>
+              </a>
+            </li>
 
-      <!-- Titolo Account -->
+            <li class="nav-item">
+              <a
+                href="#grafico-linee"
+                class="nav-link sidebar-link"
+                :class="{ 'active-link': activeLink === 'grafico-linee' }"
+                @click.prevent="goToGraph('grafico-linee')"
+              >
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-graph-up icon-azure me-3 flex-shrink-0"></i>
+                  <span class="sidebar-text">Grafico linee</span>
+                </div>
+              </a>
+            </li>
+
+            <li class="nav-item">
+              <a
+                href="#grafico-torta"
+                class="nav-link sidebar-link"
+                :class="{ 'active-link': activeLink === 'grafico-torta' }"
+                @click.prevent="goToGraph('grafico-torta')"
+              >
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-pie-chart icon-azure me-3 flex-shrink-0"></i>
+                  <span class="sidebar-text">Grafico torta</span>
+                </div>
+              </a>
+            </li>
+          </template>
+
+          <!-- UTENTI -->
+          <template v-if="route.path === '/gestione-utenti'">
+            <li v-if="canAny(['users:manage','users:status:update','users:role:update'])" class="nav-item">
+              <a
+                href="#gestione-stato-ruolo"
+                class="nav-link sidebar-link"
+                :class="{ 'active-link': activeLink === 'gestione-stato-ruolo' }"
+                @click.prevent="goToGraph('gestione-stato-ruolo')"
+              >
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-person-check icon-azure me-3 flex-shrink-0"></i>
+                  <span class="sidebar-text">Stato e ruolo</span>
+                </div>
+              </a>
+            </li>
+
+            <li v-if="canAny(['requests:manage','users:building:update','users:building:view'])" class="nav-item">
+              <a
+                href="#assegnazione-edifici"
+                class="nav-link sidebar-link"
+                :class="{ 'active-link': activeLink === 'assegnazione-edifici' }"
+                @click.prevent="goToGraph('assegnazione-edifici')"
+              >
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-diagram-3 icon-azure me-3 flex-shrink-0"></i>
+                  <span class="sidebar-text">Assegnazione edifici</span>
+                </div>
+              </a>
+            </li>
+
+            <li v-if="can('users:info:view')" class="nav-item">
+              <a
+                href="#info-utenti"
+                class="nav-link sidebar-link"
+                :class="{ 'active-link': activeLink === 'info-utenti' }"
+                @click.prevent="goToGraph('info-utenti')"
+              >
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-search icon-azure me-3 flex-shrink-0"></i>
+                  <span class="sidebar-text">Info utenti</span>
+                </div>
+              </a>
+            </li>
+
+            <li v-if="can('roles:manage')" class="nav-item">
+              <a
+                href="#crea-ruolo"
+                class="nav-link sidebar-link"
+                :class="{ 'active-link': activeLink === 'crea-ruolo' }"
+                @click.prevent="goToGraph('crea-ruolo')"
+              >
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-shield-lock icon-azure me-3 flex-shrink-0"></i>
+                  <span class="sidebar-text">Ruoli</span>
+                </div>
+              </a>
+            </li>
+          </template>
+
+          <!-- EDIFICI -->
+          <template v-if="route.path === '/gestione-edifici'">
+            <li class="nav-item">
+              <a
+                href="#visualizza-edifici"
+                class="nav-link sidebar-link"
+                :class="{ 'active-link': activeLink === 'visualizza-edifici' }"
+                @click.prevent="goToGraph('visualizza-edifici')"
+              >
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-table icon-azure me-3 flex-shrink-0"></i>
+                  <span class="sidebar-text">Lista edifici</span>
+                </div>
+              </a>
+            </li>
+
+            <li v-if="canAny(['buildings:create','buildings:manage'])" class="nav-item">
+              <a
+                href="#crea-edificio"
+                class="nav-link sidebar-link"
+                :class="{ 'active-link': activeLink === 'crea-edificio' }"
+                @click.prevent="goToGraph('crea-edificio')"
+              >
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-plus-circle icon-azure me-3 flex-shrink-0"></i>
+                  <span class="sidebar-text">Crea edificio</span>
+                </div>
+              </a>
+            </li>
+          </template>
+
+          <!-- OGGETTI & REGOLE -->
+          <template v-if="route.path === '/oggetti-regole'">
+            <li v-if="canAny(['assets:create','assets:manage'])" class="nav-item">
+              <a
+                href="#crea-oggetto"
+                class="nav-link sidebar-link"
+                :class="{ 'active-link': activeLink === 'crea-oggetto' }"
+                @click.prevent="goToGraph('crea-oggetto')"
+              >
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-plus-square icon-azure me-3 flex-shrink-0"></i>
+                  <span class="sidebar-text">Crea oggetto</span>
+                </div>
+              </a>
+            </li>
+
+            <li v-if="canAny(['rules:create','rules:manage'])" class="nav-item">
+              <a
+                href="#crea-regola"
+                class="nav-link sidebar-link"
+                :class="{ 'active-link': activeLink === 'crea-regola' }"
+                @click.prevent="goToGraph('crea-regola')"
+              >
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-plus-square-dotted icon-azure me-3 flex-shrink-0"></i>
+                  <span class="sidebar-text">Crea regola</span>
+                </div>
+              </a>
+            </li>
+
+            <li v-if="canAny(['assets:view','assets:manage'])" class="nav-item">
+              <a
+                href="#visualizza-oggetti"
+                class="nav-link sidebar-link"
+                :class="{ 'active-link': activeLink === 'visualizza-oggetti' }"
+                @click.prevent="goToGraph('visualizza-oggetti')"
+              >
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-box icon-azure me-3 flex-shrink-0"></i>
+                  <span class="sidebar-text">Oggetti</span>
+                </div>
+              </a>
+            </li>
+
+            <li v-if="canAny(['rules:view','rules:manage'])" class="nav-item">
+              <a
+                href="#visualizza-regole"
+                class="nav-link sidebar-link"
+                :class="{ 'active-link': activeLink === 'visualizza-regole' }"
+                @click.prevent="goToGraph('visualizza-regole')"
+              >
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-list-check icon-azure me-3 flex-shrink-0"></i>
+                  <span class="sidebar-text">Regole</span>
+                </div>
+              </a>
+            </li>
+          </template>
+
+          <!-- INTERVENTI -->
+          <template v-if="route.path === '/interventi'">
+            <li v-if="canAny(['interventions:create','interventions:manage'])" class="nav-item">
+              <a
+                href="#crea-intervento"
+                class="nav-link sidebar-link"
+                :class="{ 'active-link': activeLink === 'crea-intervento' }"
+                @click.prevent="goToGraph('crea-intervento')"
+              >
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-plus-circle icon-azure me-3 flex-shrink-0"></i>
+                  <span class="sidebar-text">Crea intervento</span>
+                </div>
+              </a>
+            </li>
+
+            <li v-if="canAny(['interventions:bulk_upload','interventions:manage'])" class="nav-item">
+              <a
+                href="#carica-interventi"
+                class="nav-link sidebar-link"
+                :class="{ 'active-link': activeLink === 'carica-interventi' }"
+                @click.prevent="goToGraph('carica-interventi')"
+              >
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-upload icon-azure me-3 flex-shrink-0"></i>
+                  <span class="sidebar-text">Carica (bulk)</span>
+                </div>
+              </a>
+            </li>
+
+            <li v-if="canAny(['interventions:view','interventions:manage'])" class="nav-item">
+              <a
+                href="#tabella-interventi"
+                class="nav-link sidebar-link"
+                :class="{ 'active-link': activeLink === 'tabella-interventi' }"
+                @click.prevent="goToGraph('tabella-interventi')"
+              >
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-table icon-azure me-3 flex-shrink-0"></i>
+                  <span class="sidebar-text">Tabella</span>
+                </div>
+              </a>
+            </li>
+          </template>
+        </ul>
+      </template>
+
+      <!-- Account -->
       <ul class="nav flex-column mt-4">
         <li class="nav-item mb-2 px-3">
           <h6 class="text-uppercase small fw-semibold mb-0">Account</h6>
         </li>
       </ul>
+
       <ul class="nav flex-column mt-0 sidebar-menu">
         <li class="nav-item">
           <a href="#" class="nav-link sidebar-link" @click.prevent="$emit('open-settings')">
@@ -140,9 +414,15 @@
             </div>
           </a>
         </li>
-        <li class="nav-item">
-          <router-link to="/notifiche" class="nav-link sidebar-link" active-class="active-link"
-            exact-active-class="active-link" @click="setPageTitle('Notifiche')">
+
+        <li v-if="can('notifications:view')" class="nav-item">
+          <router-link
+            to="/notifiche"
+            class="nav-link sidebar-link"
+            active-class="active-link"
+            exact-active-class="active-link"
+            @click="setPageTitle('Notifiche')"
+          >
             <div class="d-flex align-items-center">
               <i class="bi bi-bell icon-azure me-3 flex-shrink-0"></i>
               <span class="sidebar-text">Notifiche</span>
@@ -152,26 +432,122 @@
       </ul>
     </div>
 
-    <!-- Pulsante Logout sempre in basso -->
+    <!-- Logout -->
     <div class="p-3">
       <button class="btn w-100 sidebar-logout-btn d-flex align-items-center justify-content-center" @click="logout">
         <i class="bi bi-box-arrow-right icon-azure me-2"></i>
         <span>Logout</span>
       </button>
     </div>
-
   </div>
 </template>
+
+<script setup>
+import { computed, ref, onMounted, onBeforeUnmount, watch } from "vue";
+import { useRoute } from "vue-router";
+import { useAuthStore } from "@/stores/auth.store";
+import { usePermissions } from "@/composables/usePermissions";
+
+defineEmits(["open-settings"]);
+
+const route = useRoute();
+const authStore = useAuthStore();
+const { hasPermission, hasAny } = usePermissions();
+
+const activeLink = ref(null);
+const scrollEl = ref(null);
+
+const showVisualizzazioni = computed(() => {
+  return ["/dashboard", "/gestione-utenti", "/gestione-edifici", "/oggetti-regole", "/interventi"].includes(route.path);
+});
+
+function can(p) {
+  return hasPermission(p);
+}
+function canAny(list) {
+  return hasAny(list);
+}
+
+function setPageTitle(_title) {
+  // hook se vuoi aggiornare un titolo centralizzato
+}
+
+function goToGraph(id) {
+  activeLink.value = id;
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function logout() {
+  authStore.logout();
+}
+
+function onScroll() {
+  if (!showVisualizzazioni.value) return;
+
+  const ids = [
+    "pannello-riepilogativo",
+    "grafico-linee",
+    "grafico-torta",
+    "gestione-stato-ruolo",
+    "assegnazione-edifici",
+    "info-utenti",
+    "crea-ruolo",
+    "visualizza-edifici",
+    "crea-edificio",
+    "crea-oggetto",
+    "crea-regola",
+    "visualizza-oggetti",
+    "visualizza-regole",
+    "crea-intervento",
+    "carica-interventi",
+    "tabella-interventi",
+  ];
+
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+
+    const rect = el.getBoundingClientRect();
+    if (rect.top < 160 && rect.bottom > 160) {
+      activeLink.value = id;
+      break;
+    }
+  }
+}
+
+onMounted(() => {
+  scrollEl.value = document.getElementById("main-scroll");
+  if (scrollEl.value) {
+    scrollEl.value.addEventListener("scroll", onScroll, { passive: true });
+  } else {
+    window.addEventListener("scroll", onScroll, { passive: true });
+  }
+  onScroll();
+});
+
+onBeforeUnmount(() => {
+  if (scrollEl.value) scrollEl.value.removeEventListener("scroll", onScroll);
+  window.removeEventListener("scroll", onScroll);
+});
+
+watch(
+  () => route.path,
+  () => {
+    // aggiorna subito highlight quando cambi sezione
+    setTimeout(onScroll, 0);
+  }
+);
+</script>
 
 <style scoped>
 .sidebar-container {
   width: 260px;
-  background-color: #1F263E;
+  background-color: #1f263e;
 }
 
-/* Link della sidebar - SPAZIATURA PIENA */
 .sidebar-link {
-  background-color: #1F263E;
+  background-color: #1f263e;
   color: white;
   text-decoration: none;
   border-radius: 0;
@@ -179,234 +555,38 @@
   transition: all 0.2s ease;
   display: block;
   width: 100%;
-  /* Rimuove tutti i margini */
   margin: 0;
-  border-left: none;
-  border-right: none;
 }
 
-/* Testo che si adatta */
 .sidebar-text {
   flex-grow: 1;
   white-space: normal;
-  word-wrap: break-word;
   overflow-wrap: break-word;
   min-width: 0;
 }
 
-/* Icone azzurre */
 .icon-azure {
   color: #58a6ff !important;
   flex-shrink: 0;
 }
 
-/* Hover */
 .sidebar-link:hover {
-  background-color: #27314E;
+  background-color: #27314e;
 }
 
-/* LINK ATTIVO - RIEMPIE TUTTA LA LARGHEZZA */
 .sidebar-link.active-link {
-  background-color: #3A4668;
+  background-color: #3a4668;
   font-weight: bold;
-  /* Bordo SOLO a sinistra */
   border-left: 4px solid #58a6ff;
-  border-right: none;
   color: white;
-  /* Estende fino al bordo destro */
-  margin-right: 0;
-  padding-right: 1rem;
-  /* Rimuove eventuali spazi extra */
-  position: relative;
-  left: 0;
-  right: 0;
 }
 
-/* Colore icone nei link attivi */
-.sidebar-link.active-link .icon-azure {
-  color: white !important;
-}
-
-/* Contenitore per estendere fino al bordo */
-.sidebar-menu {
-  /* Rimuove padding e margin del contenitore */
-  padding: 0;
-  margin: 0;
-  width: 100%;
-}
-
-/* Rimuove spaziature dagli item */
-.sidebar-menu .nav-item {
-  margin: 0;
-  width: 100%;
-}
-
-/* Header */
-.sidebar-header {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-/* Stile pulsante logout */
 .sidebar-logout-btn {
-  background-color: #27314E;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 0.6rem 0;
-  transition: all 0.2s ease;
+  background-color: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
-
 .sidebar-logout-btn:hover {
-  background-color: #3A4668;
-}
-
-/* Assicura che tutto sia allineato correttamente */
-.d-flex.align-items-center {
-  min-height: 24px;
+  background-color: rgba(255, 255, 255, 0.1);
 }
 </style>
-
-
-<script setup>
-import { ref, watch, onUnmounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { useAuthStore } from '@/stores/auth.store'
-
-const props = defineProps({
-  scrollContainer: Object
-})
-
-const router = useRouter()
-const route = useRoute()
-const authStore = useAuthStore()
-
-const emit = defineEmits(['update-page-title', 'open-settings'])
-
-// LOGOUT
-async function logout() {
-  try {
-    await authStore.logout()
-  } catch (err) {
-    console.error("Errore logout:", err)
-  }
-}
-
-// Link attivo dei grafici
-const activeLink = ref('')
-
-// Mappa dei titoli per le route
-const routeTitles = {
-  '/dashboard': 'Dashboard',
-  '/calendar': 'Calendario Interventi',
-  '/buildings-list': 'Edifici affidati',
-  '/visualizzazione-tabellare': 'Visualizzazione Tabellare',
-  '/gestione-utenti': 'Gestione utenti',
-  '/assegna-edifici': 'Assegna edifici',
-}
-
-// Funzione per aggiornare il titolo
-function setPageTitle(title) {
-  emit('update-page-title', title)
-}
-
-// Scroll al grafico selezionato con offset navbar
-function scrollTo(id) {
-  const el = document.getElementById(id)
-  if (el && props.scrollContainer) {
-    const navbar = document.querySelector('nav.navbar')
-    const navbarHeight = navbar ? navbar.offsetHeight : 0
-    props.scrollContainer.scrollTo({
-      top: el.offsetTop - navbarHeight,
-      behavior: 'smooth'
-    })
-    activeLink.value = id
-  }
-}
-
-// Funzione principale per gestire click su grafici
-function goToGraph(id) {
-  if (route.path === '/dashboard') {
-    scrollTo(id)
-  } else {
-    router.push({ path: '/dashboard', query: { focus: id } })
-  }
-}
-
-// Evidenziazione fluida durante lo scroll
-function onScroll() {
-  if (!props.scrollContainer) return
-
-  const scrollTop = props.scrollContainer.scrollTop
-  const containerHeight = props.scrollContainer.clientHeight
-
-  const sections = ['pannello-riepilogativo', 'grafico-linee', 'grafico-torta']
-  let current = ''
-
-  for (const id of sections) {
-    const el = document.getElementById(id)
-    if (!el) continue
-
-    const elTop = el.offsetTop
-    const elBottom = el.offsetTop + el.offsetHeight
-
-    if (scrollTop + containerHeight / 2 >= elTop && scrollTop + containerHeight / 2 < elBottom) {
-      current = id
-      break
-    }
-  }
-
-  activeLink.value = current
-}
-
-// Scroll automatico al grafico passato via query
-function scrollToGraphFromQuery() {
-  const graphId = route.query.focus
-  if (graphId && props.scrollContainer) {
-    const el = document.getElementById(graphId)
-    if (el) {
-      const navbar = document.querySelector('nav.navbar')
-      const navbarHeight = navbar ? navbar.offsetHeight : 0
-      props.scrollContainer.scrollTo({
-        top: el.offsetTop - navbarHeight,
-        behavior: 'smooth'
-      })
-      activeLink.value = graphId
-      
-      router.replace({ query: {} }) // rimuovo query per evitare scroll futuri indesiderati
-    }
-  }
-}
-
-// Aggiorna il titolo quando cambia la route
-watch(() => route.path, (newPath) => {
-  if (routeTitles[newPath]) {
-    setPageTitle(routeTitles[newPath])
-  }
-  
-  // Resetta activeLink se non siamo su dashboard
-  if (newPath !== '/dashboard') {
-    activeLink.value = ''
-  } else {
-    scrollToGraphFromQuery()
-  }
-}, { immediate: true })
-
-// Watch per aggiornare event listener quando scrollContainer cambia
-watch(() => props.scrollContainer, (newContainer, oldContainer) => {
-  if (oldContainer) {
-    oldContainer.removeEventListener('scroll', onScroll)
-  }
-  if (newContainer) {
-    newContainer.addEventListener('scroll', onScroll)
-    scrollToGraphFromQuery()
-    onScroll() // evidenzia subito la sezione visibile
-  }
-}, { immediate: true })
-
-// Cleanup al destroy
-onUnmounted(() => {
-  if (props.scrollContainer) {
-    props.scrollContainer.removeEventListener('scroll', onScroll)
-  }
-})
-</script>

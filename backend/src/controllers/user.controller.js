@@ -12,7 +12,7 @@ export const getMe = async (req, res) => {
     const { User } = getTenantModels(req);
 
     const user = await User.findById(req.user._id)
-      .select("_id name surname email roles status buildingIds createdAt updatedAt")
+      .select("_id name surname email roles status buildingIds isBootstrapAdmin createdAt updatedAt")
       .populate({
         path: "roles",
         select: "roleName permission",
@@ -44,7 +44,6 @@ export const getMe = async (req, res) => {
   }
 };
 
-
 /* =========================================================
    LIST PENDING USERS
    GET /api/v1/users/pending
@@ -54,7 +53,7 @@ export const getPendingUsers = async (req, res) => {
     const { User } = getTenantModels(req);
 
     const users = await User.find({ status: "pending" })
-      .select("_id name surname email roles status buildingIds createdAt")
+      .select("_id name surname email roles status buildingIds isBootstrapAdmin createdAt")
       .populate("roles", "roleName")
       .lean();
 
@@ -67,7 +66,6 @@ export const getPendingUsers = async (req, res) => {
   }
 };
 
-
 /* =========================================================
    LIST ACTIVE AND DISABLED USERS
    GET /api/v1/users
@@ -77,7 +75,7 @@ export const getManagedUsers = async (req, res) => {
     const { User } = getTenantModels(req);
 
     const users = await User.find({ status: { $in: ["active", "disabled"] } })
-      .select("_id name surname email roles status buildingIds createdAt")
+      .select("_id name surname email roles status buildingIds isBootstrapAdmin createdAt")
       .populate("roles", "roleName")
       .lean();
 
@@ -89,7 +87,6 @@ export const getManagedUsers = async (req, res) => {
     });
   }
 };
-
 
 /* =========================================================
    APPROVE PENDING USER + SET ROLE (default user_base)
@@ -113,11 +110,10 @@ export const approvePendingUser = async (req, res) => {
       });
     }
 
-    let finalRoleName = (roleName && String(roleName).trim()) || "user_base";
+    const finalRoleName = (roleName && String(roleName).trim()) || "user_base";
 
     const role = await Role.findOne({ roleName: finalRoleName }).lean();
     if (!role) {
-      // fallback: cerca un ruolo di default (es. user_base) – se manca, errore chiaro
       return res.status(500).json({
         message: `Ruolo '${finalRoleName}' non trovato. Controllare che il seed sia stato eseguito.`,
       });
@@ -141,7 +137,11 @@ export const approvePendingUser = async (req, res) => {
   }
 };
 
-
+/* =========================================================
+   UPDATE ROLE
+   PATCH /api/v1/users/:id/role
+   Body: { roleName: string }
+========================================================= */
 export const updateUserRole = async (req, res) => {
   try {
     const { id } = req.params;
@@ -149,6 +149,13 @@ export const updateUserRole = async (req, res) => {
 
     const roleName = String(rawRoleName || "").trim();
     if (!roleName) return res.status(400).json({ message: "roleName mancante" });
+
+    // ✅ Vincolo richiesto: bootstrap admin non può cambiare il proprio ruolo
+    if (req.user?.isBootstrapAdmin === true && String(req.user?._id) === String(id)) {
+      return res.status(403).json({
+        message: "Non puoi cambiare il tuo ruolo (bootstrap admin).",
+      });
+    }
 
     const { User, Role } = getTenantModels(req);
 
@@ -179,8 +186,6 @@ export const updateUserRole = async (req, res) => {
   }
 };
 
-
-
 /* =========================================================
    UPDATE STATUS (active <-> disabled)
    PATCH /api/v1/users/:id/status
@@ -189,26 +194,32 @@ export const updateUserRole = async (req, res) => {
 export const updateUserStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const rawStatus = req.body?.status;     // opzionale
-    const rawRoleName = req.body?.roleName; // opzionale
 
-    const status = rawStatus ? String(rawStatus).trim().toLowerCase() : undefined;
-    const roleName = rawRoleName ? String(rawRoleName).trim() : undefined;
-
-    if (!status && !roleName) {
+    // ✅ In questa route accettiamo SOLO status
+    if (req.body?.roleName !== undefined) {
       return res.status(400).json({
-        message: "Devi fornire almeno uno tra 'status' o 'roleName'",
+        message: "Campo non consentito: 'roleName'. Usa PATCH /users/:id/role.",
       });
     }
 
-    if (status && !["active", "disabled"].includes(status)) {
+    const rawStatus = req.body?.status;
+    const status = rawStatus ? String(rawStatus).trim().toLowerCase() : undefined;
+
+    if (!status) {
+      return res.status(400).json({
+        message: "status mancante",
+        allowed: ["active", "disabled"],
+      });
+    }
+
+    if (!["active", "disabled"].includes(status)) {
       return res.status(400).json({
         message: "status non valido",
         allowed: ["active", "disabled"],
       });
     }
 
-    const { User, Role } = getTenantModels(req);
+    const { User } = getTenantModels(req);
 
     const user = await User.findById(id);
     if (!user) return res.status(404).json({ message: "Utente non trovato" });
@@ -220,35 +231,21 @@ export const updateUserStatus = async (req, res) => {
       });
     }
 
-    const updates = {};
+    const allowedTransition =
+      (user.status === "active" && status === "disabled") ||
+      (user.status === "disabled" && status === "active");
 
-    // ruolo (opzionale)
-    if (roleName) {
-      const role = await Role.findOne({ roleName }).lean();
-      if (!role) return res.status(400).json({ message: `Ruolo '${roleName}' non esistente` });
-      updates.roles = [role._id];
+    if (!allowedTransition) {
+      return res.status(409).json({
+        message: "Transizione status non consentita",
+        currentStatus: user.status,
+        requestedStatus: status,
+        allowedTransitions: ["active -> disabled", "disabled -> active"],
+      });
     }
 
-    // status (opzionale) con transizioni consentite
-    if (status) {
-      const allowedTransition =
-        (user.status === "active" && status === "disabled") ||
-        (user.status === "disabled" && status === "active");
-
-      if (!allowedTransition) {
-        return res.status(409).json({
-          message: "Transizione status non consentita",
-          currentStatus: user.status,
-          requestedStatus: status,
-          allowedTransitions: ["active -> disabled", "disabled -> active"],
-        });
-      }
-
-      updates.status = status;
-    }
-
-    const updated = await User.findByIdAndUpdate(id, updates, { new: true })
-      .select("_id name surname email status roles buildingIds")
+    const updated = await User.findByIdAndUpdate(id, { status }, { new: true })
+      .select("_id name surname email status roles buildingIds isBootstrapAdmin")
       .populate("roles", "roleName")
       .lean();
 
@@ -257,21 +254,19 @@ export const updateUserStatus = async (req, res) => {
       userId: updated._id,
       status: updated.status,
       role: updated.roles?.[0]?.roleName,
-      applied: Object.keys(updates),
+      applied: ["status"],
     });
   } catch (err) {
     return res.status(500).json({
-      message: "Errore update utente (status/role)",
+      message: "Errore update utente (status)",
       error: err.message,
     });
   }
 };
 
-
-
 /* =========================================================
    USERS BUILDINGS VIEW
-   GET /api/v1/users/buildings?missing=true
+   GET /api/v1/users/buildings?missing=true&status=active
 ========================================================= */
 export const getUsersBuildings = async (req, res) => {
   try {
@@ -280,7 +275,6 @@ export const getUsersBuildings = async (req, res) => {
     const missing = String(req.query.missing || "").toLowerCase() === "true";
     const rawStatus = req.query.status;
 
-    // default: active (come richiesto per la pagina assegnazione edifici)
     const allowedStatuses = ["pending", "active", "disabled"];
     let status = "active";
 
@@ -297,10 +291,7 @@ export const getUsersBuildings = async (req, res) => {
     const filter = {};
 
     if (missing) {
-      filter.$or = [
-        { buildingIds: { $exists: false } },
-        { buildingIds: { $size: 0 } },
-      ];
+      filter.$or = [{ buildingIds: { $exists: false } }, { buildingIds: { $size: 0 } }];
     }
 
     if (status) {
@@ -308,7 +299,7 @@ export const getUsersBuildings = async (req, res) => {
     }
 
     const users = await User.find(filter)
-      .select("_id name surname email status roles buildingIds createdAt")
+      .select("_id name surname email status roles buildingIds isBootstrapAdmin createdAt")
       .populate("roles", "roleName")
       .lean();
 
@@ -320,7 +311,6 @@ export const getUsersBuildings = async (req, res) => {
     });
   }
 };
-
 
 /* =========================================================
    UPDATE USER BUILDINGS
@@ -338,7 +328,6 @@ export const updateUserBuildings = async (req, res) => {
 
     const { User, Building } = getTenantModels(req);
 
-    // solo utenti ACTIVE per questa funzionalità
     const userDoc = await User.findById(id).select("_id status");
     if (!userDoc) return res.status(404).json({ message: "Utente non trovato" });
 
@@ -351,7 +340,6 @@ export const updateUserBuildings = async (req, res) => {
 
     const uniqueIds = [...new Set(buildingIds.map(String))];
 
-    // assegna solo edifici attivi
     const existingBuildings = await Building.find({ _id: { $in: uniqueIds }, isActive: true })
       .select("_id")
       .lean();
@@ -363,7 +351,7 @@ export const updateUserBuildings = async (req, res) => {
     }
 
     const user = await User.findByIdAndUpdate(id, { buildingIds: uniqueIds }, { new: true })
-      .select("_id name surname email status roles buildingIds")
+      .select("_id name surname email status roles buildingIds isBootstrapAdmin")
       .populate("roles", "roleName")
       .lean();
 
@@ -373,7 +361,6 @@ export const updateUserBuildings = async (req, res) => {
   }
 };
 
-
 export async function searchUsers(req, res) {
   try {
     const { User, Building } = getTenantModels(req);
@@ -382,17 +369,11 @@ export async function searchUsers(req, res) {
     const page = Math.max(1, parseInt(req.query.page || "1", 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || "25", 10) || 25));
 
-    // Se q è vuota: mostra tutti (paginated) per la tabella iniziale
     const filter = {};
 
     if (qRaw.length > 0) {
-      // case-insensitive "contains"
       const rx = new RegExp(escapeRegExp(qRaw), "i");
-      filter.$or = [
-        { name: rx },
-        { surname: rx },
-        { email: rx },
-      ];
+      filter.$or = [{ name: rx }, { surname: rx }, { email: rx }];
     }
 
     const [total, users] = await Promise.all([
@@ -401,16 +382,15 @@ export async function searchUsers(req, res) {
         .sort({ createdAt: -1, _id: 1 })
         .skip((page - 1) * limit)
         .limit(limit)
-        .select("_id name surname email status roles buildingIds createdAt")
-        .populate("roles", "roleName permissions") // tieni permissions se ti serve mostrarle
+        .select("_id name surname email status roles buildingIds isBootstrapAdmin createdAt")
+        .populate("roles", "roleName permissions")
         .lean(),
     ]);
 
-    // Risolvo buildings (solo attivi) per rendere la UI comoda
     const allBuildingIds = [
       ...new Set(
         users
-          .flatMap((u) => Array.isArray(u.buildingIds) ? u.buildingIds : [])
+          .flatMap((u) => (Array.isArray(u.buildingIds) ? u.buildingIds : []))
           .map((id) => String(id))
       ),
     ];
@@ -426,13 +406,11 @@ export async function searchUsers(req, res) {
 
     const items = users.map((u) => {
       const buildingIds = Array.isArray(u.buildingIds) ? u.buildingIds : [];
-      const buildings = buildingIds
-        .map((bid) => buildingsMap.get(String(bid)))
-        .filter(Boolean);
+      const buildings = buildingIds.map((bid) => buildingsMap.get(String(bid))).filter(Boolean);
 
       return {
         ...u,
-        buildings, // array buildings attivi
+        buildings,
       };
     });
 
@@ -452,7 +430,6 @@ export async function searchUsers(req, res) {
   }
 }
 
-// Evita regex injection / errori
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

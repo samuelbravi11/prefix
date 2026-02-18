@@ -58,7 +58,7 @@
 
     <div v-else>
       <div class="alert alert-success">
-        ✅ Bootstrap completato. L’admin è attivo.
+        Bootstrap completato. L’admin è attivo.
       </div>
       <router-link to="/login" class="btn btn-primary w-100">Vai al login</router-link>
     </div>

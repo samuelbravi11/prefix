@@ -1,6 +1,12 @@
 import express from "express";
 import {
   getUserNotifications,
+  getUnreadCount,
+  patchNotification,
+  bulkMarkRead,
+  bulkArchive,
+  bulkDelete,
+  deleteNotification,
   markNotificationAsRead,
   markAllAsRead
 } from "../controllers/notification.controller.js";
@@ -13,6 +19,12 @@ const router = express.Router();
 */
 router.get("/", getUserNotifications);
 
+// count
+router.get("/unread-count", getUnreadCount);
+
+// single update (v2)
+router.patch("/:id", patchNotification);
+
 /*
   PATCH /api/v1/notifications/:id/read
   Segna una notifica come letta
@@ -24,6 +36,14 @@ router.patch("/:id/read", markNotificationAsRead);
   Segna tutte le notifiche come lette
 */
 router.patch("/read-all", markAllAsRead);
+
+// bulk (v2)
+router.post("/bulk/mark-read", bulkMarkRead);
+router.post("/bulk/archive", bulkArchive);
+router.post("/bulk/delete", bulkDelete);
+
+// delete one (v2)
+router.delete("/:id", deleteNotification);
 
 
 export default router;
