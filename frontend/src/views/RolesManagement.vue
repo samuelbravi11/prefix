@@ -62,7 +62,6 @@
             <template #body="{ data }">
               <div class="d-flex flex-wrap gap-1 align-items-center">
                 <template v-if="(rolePermissionNames(data).length || 0) > 0">
-                  <!-- Mostro fino a maxTags; poi “+N” -->
                   <Tag
                     v-for="p in rolePermissionNames(data).slice(0, maxTags)"
                     :key="`${data._id}-${p}`"
@@ -245,10 +244,6 @@ function validate() {
 }
 
 function rolePermissionNames(role) {
-  // Normalizza i possibili shape che arrivano dal backend
-  // - role.permissionNames: string[]
-  // - role.permissions: string[]
-  // - role.permission: [{name}] oppure string[]
   const a = [];
 
   const pn = role?.permissionNames;
@@ -275,7 +270,6 @@ const rolesFiltered = computed(() => {
 });
 
 const extraPermissionsOptions = computed(() => {
-  // Escludo basePermissions e il permesso speciale (gestito da checkbox)
   const excluded = new Set([...(basePermissions.value || []), "buildings:inherit_all"]);
 
   return (allPermissions.value || [])
@@ -289,21 +283,44 @@ async function fetchPermissions() {
 
   const payload = res.data;
 
-  // 1) Se backend torna direttamente string[]
   if (Array.isArray(payload)) {
     allPermissions.value = payload.map(String);
     basePermissions.value = [];
     return;
   }
 
-  // 2) Se backend torna oggetto
   allPermissions.value = Array.isArray(payload?.allPermissions) ? payload.allPermissions.map(String) : [];
   basePermissions.value = Array.isArray(payload?.basePermissions) ? payload.basePermissions.map(String) : [];
 }
 
+function ensureSystemRoles(list) {
+  const out = Array.isArray(list) ? [...list] : [];
+  const names = new Set(out.map((r) => String(r?.roleName || "")));
+
+  // Se per qualche motivo non tornano dal backend, li vogliamo comunque sempre visibili in tabella.
+  if (!names.has("admin")) {
+    out.unshift({
+      _id: "system-admin",
+      roleName: "admin",
+      permissionNames: [],
+    });
+  }
+
+  if (!names.has("user_base")) {
+    out.unshift({
+      _id: "system-user_base",
+      roleName: "user_base",
+      permissionNames: [],
+    });
+  }
+
+  return out;
+}
+
 async function fetchRoles() {
   const res = await api.get("/roles");
-  roles.value = Array.isArray(res.data) ? res.data : [];
+  const list = Array.isArray(res.data) ? res.data : [];
+  roles.value = ensureSystemRoles(list);
 }
 
 async function reloadAll() {
@@ -333,7 +350,6 @@ function openCreate() {
 
 function close() {
   dlg.visible = false;
-  dlg.saving = false;
 }
 
 function openDetails(role) {
@@ -341,8 +357,31 @@ function openDetails(role) {
   details.visible = true;
 }
 
-function setDeleting(id, v) {
-  deleting[id] = v;
+function confirmDelete(role) {
+  confirm.require({
+    message: `Eliminare il ruolo "${role.roleName}"?`,
+    header: "Conferma",
+    icon: "pi pi-exclamation-triangle",
+    acceptLabel: "Elimina",
+    rejectLabel: "Annulla",
+    accept: async () => {
+      deleting[role._id] = true;
+      try {
+        await api.delete(`/roles/${role._id}`);
+        toast.add({ severity: "success", summary: "Ok", detail: "Ruolo eliminato", life: 2500 });
+        await reloadAll();
+      } catch (e) {
+        toast.add({
+          severity: "error",
+          summary: "Errore",
+          detail: e?.response?.data?.message || "Eliminazione fallita",
+          life: 3500,
+        });
+      } finally {
+        deleting[role._id] = false;
+      }
+    },
+  });
 }
 
 async function createRole() {
@@ -350,19 +389,17 @@ async function createRole() {
 
   dlg.saving = true;
   try {
-    const extras = [...(form.extraPermissions || [])];
-    if (form.inheritAllBuildings) extras.push("buildings:inherit_all");
+    const payload = {
+      roleName: String(form.roleName || "").trim(),
+      inheritAllBuildings: form.inheritAllBuildings === true,
+      extraPermissions: Array.isArray(form.extraPermissions) ? form.extraPermissions : [],
+    };
 
-    // Mantengo esattamente il tuo payload attuale:
-    // { roleName, extraPermissions }
-    await api.post("/roles", {
-      roleName: String(form.roleName).trim(),
-      extraPermissions: extras,
-    });
+    await api.post("/roles", payload);
 
     toast.add({ severity: "success", summary: "Ok", detail: "Ruolo creato", life: 2500 });
-    close();
-    await fetchRoles();
+    dlg.visible = false;
+    await reloadAll();
   } catch (e) {
     toast.add({
       severity: "error",
@@ -375,35 +412,5 @@ async function createRole() {
   }
 }
 
-function confirmDelete(role) {
-  confirm.require({
-    message: `Vuoi eliminare il ruolo "${role.roleName}"?`,
-    header: "Conferma",
-    icon: "pi pi-exclamation-triangle",
-    acceptLabel: "Elimina",
-    rejectLabel: "Annulla",
-    accept: async () => {
-      setDeleting(role._id, true);
-      try {
-        await api.delete(`/roles/${role._id}`);
-        toast.add({ severity: "success", summary: "Ok", detail: "Ruolo eliminato", life: 2500 });
-        await fetchRoles();
-      } catch (e) {
-        toast.add({
-          severity: "error",
-          summary: "Errore",
-          detail: e?.response?.data?.message || "Eliminazione fallita",
-          life: 3500,
-        });
-      } finally {
-        setDeleting(role._id, false);
-      }
-    },
-  });
-}
-
-onMounted(async () => {
-  if (!canManage.value) return;
-  await reloadAll();
-});
+onMounted(reloadAll);
 </script>

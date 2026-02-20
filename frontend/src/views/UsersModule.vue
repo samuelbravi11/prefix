@@ -5,6 +5,10 @@
   />
 
   <div v-else class="container-fluid py-3 module-stack">
+    <div class="d-flex justify-content-end mb-2">
+      <PermissionsHelpButton />
+    </div>
+
     <section id="gestione-stato-ruolo" v-if="canStatusRole" class="module-section">
       <UserManagement />
     </section>
@@ -38,24 +42,23 @@ import UserManagement from "@/views/UserManagement.vue";
 import UserBuildingsManagement from "@/views/UserBuildingsManagement.vue";
 import UsersInfo from "@/views/UsersInfo.vue";
 import RolesManagement from "@/views/RolesManagement.vue";
+import PermissionsHelpButton from "@/components/PermissionsHelpButton.vue";
 
 const { hasAny, hasPermission } = usePermissions();
 
+/**
+ * NB: qui usiamo la nomenclatura attuale (come da tuo catalogo):
+ * - users:approve
+ * - users:update_status
+ * - users:update_role
+ */
 const canStatusRole = computed(() =>
-  hasAny([
-    "users:pending:view",
-    "users:active:view",
-    "users:pending:approve",
-    "users:status:update",
-    "users:role:update",
-  ])
+  hasAny(["users:pending:view", "users:active:view", "users:approve", "users:update_status", "users:update_role"])
 );
 
-const canAssignBuildings = computed(() =>
-  hasAny(["requests:manage", "users:building:update", "users:building:view"])
-);
+const canAssignBuildings = computed(() => hasAny(["requests:manage", "users:buildings:update", "users:buildings:view"]));
 
-const canUsersInfo = computed(() => hasPermission("users:read_info"));
+const canUsersInfo = computed(() => hasPermission("users:info:view"));
 const canCreateRole = computed(() => hasPermission("roles:manage"));
 
 const hasAtLeastOneSection = computed(() => {
@@ -64,6 +67,11 @@ const hasAtLeastOneSection = computed(() => {
 </script>
 
 <style scoped>
-.module-section { margin-bottom: 40px; }
-.module-sep { margin: 28px 0 48px; opacity: 0.10; }
+.module-section {
+  margin-bottom: 40px;
+}
+.module-sep {
+  margin: 28px 0 48px;
+  opacity: 0.1;
+}
 </style>

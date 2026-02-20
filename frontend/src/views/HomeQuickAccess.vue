@@ -31,7 +31,7 @@
                 </div>
               </div>
 
-              <div v-if="canAny(['users:pending:view','users:active:view','users:pending:approve','users:status:update','users:role:update','users:building:view','users:building:update','users:read_info','requests:manage','roles:manage'])" class="col-md-6 col-lg-4">
+              <div v-if="canAny(['users:pending:view','users:active:view','users:approve','users:update_status','users:update_role','users:buildings:view','users:buildings:update','users:info:view','requests:manage','roles:manage'])" class="col-md-6 col-lg-4">
                 <div class="card shadow-sm border-0 h-100 qa-card" @click="go('/gestione-utenti')">
                   <div class="card-body">
                     <div class="d-flex align-items-center">
@@ -189,7 +189,7 @@ function canAny(list) {
 
 const hasGeneric = computed(() =>
   can("dashboard:view") ||
-  canAny(["users:pending:view","users:active:view","users:pending:approve","users:status:update","users:role:update","users:building:view","users:building:update","users:read_info","requests:manage","roles:manage"]) ||
+  canAny(["users:pending:view","users:active:view","users:approve","users:update_status","users:update_role","users:buildings:view","users:buildings:update","users:info:view","requests:manage","roles:manage"]) ||
   canAny(["buildings:view_all","buildings:view_associated","buildings:manage"]) ||
   canAny(["assets:view","assets:manage","rules:view","rules:manage"]) ||
   canAny(["interventions:view","interventions:bulk_upload","interventions:manage"])

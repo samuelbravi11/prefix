@@ -275,6 +275,9 @@ proxyApp.post("/api/v1/platform/tenants", (req, res) => {
 });
 
 proxyApp.use("/api/v1/users", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
+// RBAC management
+proxyApp.use("/api/v1/roles", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
+proxyApp.use("/api/v1/permissions", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
 proxyApp.use("/api/v1/dashboard", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
 proxyApp.use("/api/v1/requests", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
 proxyApp.use("/api/v1/notifications", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
@@ -284,6 +287,11 @@ proxyApp.use("/api/v1/interventions", requireAuth, rbacGuard, forwardToInternal(
 // proxyApp.use("/api/v1/calendar", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
 proxyApp.use("/api/v1/assets", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
 proxyApp.use("/api/v1/rules", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
+// Categories (tipologie asset)
+proxyApp.use("/api/v1/categories", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
+// Preferences & scheduler
+proxyApp.use("/api/v1/preferences", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
+proxyApp.use("/api/v1/scheduler", requireAuth, rbacGuard, forwardToInternal({ includeUserId: true }));
 
 proxyApp.get("/health", (req, res) => {
   res.json({

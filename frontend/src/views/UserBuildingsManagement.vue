@@ -1,5 +1,5 @@
 <template>
-  <NoPermissions v-if="!canEnter" hint="Permessi richiesti: users:building:view / users:building:update e/o requests:manage" />
+  <NoPermissions v-if="!canEnter" hint="Permessi richiesti: users:buildings:view / users:buildings:update e/o requests:manage" />
 
   <div v-else class="p-3">
     <Toast />
@@ -220,10 +220,10 @@ const confirm = useConfirm();
 const { hasAny, hasPermission } = usePermissions();
 
 const canEnter = computed(() =>
-  hasAny(["users:building:view", "users:building:update", "requests:manage"])
+  hasAny(["users:buildings:view", "users:buildings:update", "requests:manage"])
 );
 const canManageRequests = computed(() => hasPermission("requests:manage"));
-const canManualAssign = computed(() => hasPermission("users:building:update"));
+const canManualAssign = computed(() => hasPermission("users:buildings:update"));
 
 const loading = ref(false);
 const globalFilter = ref("");

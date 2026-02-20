@@ -6,6 +6,10 @@
   />
 
   <div v-else class="container-fluid py-3 module-stack">
+    <div class="d-flex justify-content-end mb-2">
+      <PermissionsHelpButton />
+    </div>
+
     <section id="crea-intervento" v-if="canCreate" class="module-section">
       <CreateIntervention />
     </section>
@@ -32,6 +36,7 @@ import { usePermissions } from "@/composables/usePermissions";
 import CreateIntervention from "@/views/CreateIntervention.vue";
 import BulkUploadInterventions from "@/views/BulkUploadInterventions.vue";
 import InterventionsTable from "@/views/InterventionsTable.vue";
+import PermissionsHelpButton from "@/components/PermissionsHelpButton.vue";
 
 const { hasAny } = usePermissions();
 

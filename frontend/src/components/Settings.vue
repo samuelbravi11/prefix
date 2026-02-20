@@ -1,119 +1,93 @@
+<!-- src/components/Settings.vue -->
 <template>
   <Dialog
     v-model:visible="visible"
-    modal
     header="Impostazioni"
-    class="settings-dialog"
+    modal
+    :style="{ width: '760px', maxWidth: '96vw' }"
+    @hide="onHide"
   >
-    <div class="generic-section">
-      <h5 class="mb-3">Tema</h5>
+    <Toast />
 
-      <div class="row g-4">
-        <div class="col-12 col-md-6">
-          <label class="form-label">Tema</label>
-          <Dropdown
-            v-model="draft.theme.mode"
-            :options="['system','light','dark']"
-            class="w-100"
-          />
-        </div>
-
-        <div class="col-12 col-md-6">
-          <label class="form-label">Colore accent</label>
-          <InputText v-model="draft.theme.accent" class="w-100" />
-        </div>
-      </div>
+    <div class="text-muted small mb-3">
+      Tutti i ruoli hanno dei permessi base. Le preferenze vengono salvate sul tuo profilo.
     </div>
 
-    <div class="generic-section">
-      <h5 class="mb-3">Notifiche</h5>
-
-      <div class="d-flex align-items-center justify-content-between mb-4">
-        <span>Abilita notifiche</span>
-        <InputSwitch v-model="draft.notifications.enabled" />
-      </div>
-
-      <div class="d-flex align-items-center justify-content-between mb-3">
-        <span>In-app</span>
-        <InputSwitch v-model="draft.notifications.channels.inApp" />
-      </div>
-
-      <div class="d-flex align-items-center justify-content-between">
-        <span>Email</span>
-        <InputSwitch v-model="draft.notifications.channels.email" />
-      </div>
+    <div class="d-flex justify-content-end gap-2 mb-3">
+      <Button
+        label="Ricarica"
+        icon="pi pi-refresh"
+        size="small"
+        class="p-button-text"
+        :loading="loading"
+        @click="reload"
+      />
+      <Button
+        label="Salva"
+        icon="pi pi-save"
+        size="small"
+        :loading="saving"
+        :disabled="!dirty"
+        @click="save"
+      />
     </div>
 
-    <div class="generic-section">
-      <h5 class="mb-3">Controlli</h5>
-
-      <div class="row g-4 mb-4">
-        <div class="col-12 col-md-4">
-          <label>Controllo regolistico (min)</label>
-          <InputNumber v-model="draft.controls.rulesInterval" class="w-100" />
-        </div>
-
-        <div class="col-12 col-md-4">
-          <label>Controllo AI (min)</label>
-          <InputNumber v-model="draft.controls.aiInterval" class="w-100" />
-        </div>
-
-        <div class="col-12 col-md-4">
-          <label>Polling notifiche (sec)</label>
-          <InputNumber v-model="draft.controls.pollingInterval" class="w-100" />
-        </div>
-      </div>
-
-      <div class="d-flex gap-3 flex-wrap">
-        <Button
-          label="Esegui controllo regole ora"
-          icon="pi pi-play"
-          class="p-button-outlined"
-          size="small"
-          @click="triggerRulesNow"
+    <div class="row g-3">
+      <div class="col-12 col-lg-6">
+        <label class="form-label">Tema</label>
+        <Dropdown
+          v-model="draft.theme"
+          :options="themeOptions"
+          optionLabel="label"
+          optionValue="value"
+          class="w-100"
+          placeholder="Seleziona tema"
         />
+        <div class="text-muted small mt-1">"System" segue le impostazioni del tuo sistema operativo.</div>
+      </div>
 
-        <Button
-          label="Esegui controllo AI ora"
-          icon="pi pi-play"
-          class="p-button-outlined"
-          size="small"
-          @click="triggerAiNow"
+      <div class="col-12 col-lg-6">
+        <label class="form-label">Accent color</label>
+        <Dropdown
+          v-model="draft.accent"
+          :options="accentOptions"
+          optionLabel="label"
+          optionValue="value"
+          class="w-100"
+          placeholder="Seleziona colore"
         />
       </div>
-    </div>
 
-    <template #footer>
-      <Button label="Chiudi" class="p-button-text" @click="visible = false" />
-      <Button label="Salva" icon="pi pi-check" @click="save" />
-    </template>
+      <div class="col-12">
+        <div class="form-check form-switch mt-2">
+          <input id="schedulerEnabled" class="form-check-input" type="checkbox" v-model="draft.schedulerEnabled" />
+          <label class="form-check-label" for="schedulerEnabled">
+            Abilita controlli Scheduler (solo se il tuo ruolo lo prevede)
+          </label>
+        </div>
+        <div class="text-muted small">Se disabilitato, la UI nasconde i controlli di avvio/stop dello Scheduler.</div>
+      </div>
+    </div>
   </Dialog>
 </template>
 
 <script setup>
-import { computed, reactive, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useToast } from "primevue/usetoast";
+import { usePreferencesStore } from "@/stores/preferences.store";
 
 import Dialog from "primevue/dialog";
 import Toast from "primevue/toast";
-import TabView from "primevue/tabview";
-import TabPanel from "primevue/tabpanel";
-import Dropdown from "primevue/dropdown";
-import InputText from "primevue/inputtext";
-import InputNumber from "primevue/inputnumber";
-import InputSwitch from "primevue/inputswitch";
-import Checkbox from "primevue/checkbox";
 import Button from "primevue/button";
-
-import { usePreferencesStore } from "@/stores/preferences.store";
-
-const toast = useToast();
+import Dropdown from "primevue/dropdown";
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
 });
+
 const emit = defineEmits(["update:modelValue"]);
 
+const toast = useToast();
 const prefsStore = usePreferencesStore();
 
 const visible = computed({
@@ -121,21 +95,9 @@ const visible = computed({
   set: (v) => emit("update:modelValue", v),
 });
 
-const draft = reactive({
-  theme: "system",
-  accent: "#58a6ff",
-  notifications: {
-    enabled: true,
-    channels: { inApp: true, email: false },
-    minSeverity: "info",
-    quietHours: { enabled: false, from: "22:00", to: "08:00" },
-  },
-  scheduler: {
-    rulesCheckMinutes: 15,
-    aiCheckMinutes: 60,
-    pollingSeconds: 20,
-  },
-});
+const loading = ref(false);
+const saving = ref(false);
+const initialized = ref(false);
 
 const themeOptions = [
   { label: "System", value: "system" },
@@ -143,76 +105,103 @@ const themeOptions = [
   { label: "Dark", value: "dark" },
 ];
 
-const severityOptions = [
-  { label: "Info", value: "info" },
-  { label: "Success", value: "success" },
-  { label: "Warning", value: "warning" },
-  { label: "Error", value: "error" },
+const accentOptions = [
+  { label: "Indigo", value: "indigo" },
+  { label: "Blue", value: "blue" },
+  { label: "Green", value: "green" },
+  { label: "Orange", value: "orange" },
+  { label: "Pink", value: "pink" },
 ];
+
+const draft = ref({
+  theme: "system",
+  accent: "indigo",
+  schedulerEnabled: true,
+});
+
+const dirty = computed(() => {
+  const p = prefsStore.prefs || {};
+  return (
+    String(draft.value.theme) !== String(p.theme || "system") ||
+    String(draft.value.accent) !== String(p.accent || "indigo") ||
+    Boolean(draft.value.schedulerEnabled) !== Boolean(p.schedulerEnabled ?? true)
+  );
+});
+
+function syncDraftFromStore() {
+  const p = prefsStore.prefs || {};
+  draft.value = {
+    theme: p.theme || "system",
+    accent: p.accent || "indigo",
+    schedulerEnabled: p.schedulerEnabled ?? true,
+  };
+}
+
+async function reload() {
+  loading.value = true;
+  try {
+    await prefsStore.loadMe();
+    syncDraftFromStore();
+  } catch {
+    toast.add({ severity: "error", summary: "Errore", detail: "Impossibile caricare preferenze", life: 3500 });
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function save() {
+  saving.value = true;
+  try {
+    await prefsStore.saveMe({
+      theme: draft.value.theme,
+      accent: draft.value.accent,
+      schedulerEnabled: draft.value.schedulerEnabled,
+    });
+    toast.add({ severity: "success", summary: "Salvato", detail: "Preferenze aggiornate", life: 2500 });
+  } catch (e) {
+    toast.add({
+      severity: "error",
+      summary: "Errore",
+      detail: e?.response?.data?.message || "Impossibile salvare preferenze",
+      life: 3500,
+    });
+  } finally {
+    saving.value = false;
+  }
+}
+
+function onHide() {
+  // lascia il componente in uno stato pulito quando si chiude
+  syncDraftFromStore();
+}
+
+// Carica preferenze SOLO quando l'utente apre la finestra.
+watch(
+  () => visible.value,
+  async (isOpen) => {
+    if (isOpen && !initialized.value) {
+      initialized.value = true;
+      await reload();
+    }
+  }
+);
 
 watch(
   () => prefsStore.prefs,
-  (p) => {
-    if (!p) return;
-    Object.assign(draft, JSON.parse(JSON.stringify(p)));
+  () => {
+    if (visible.value) syncDraftFromStore();
   },
-  { immediate: true, deep: true }
+  { deep: true }
 );
-
-watch(
-  () => draft.theme,
-  () => {
-    prefsStore.prefs.theme = draft.theme;
-    prefsStore.applyThemeToDom();
-  }
-);
-
-watch(
-  () => draft.accent,
-  () => {
-    prefsStore.prefs.accent = draft.accent;
-    prefsStore.applyThemeToDom();
-  }
-);
-
-async function save() {
-  try {
-    await prefsStore.save(draft);
-    toast.add({ severity: "success", summary: "Salvato", detail: "Preferenze aggiornate", life: 2000 });
-    visible.value = false;
-  } catch {
-    // error già gestito dallo store
-  }
-}
-
-async function triggerRulesNow() {
-  try {
-    await prefsStore.triggerRulesNow();
-    toast.add({ severity: "success", summary: "Ok", detail: "Controllo regole avviato", life: 2000 });
-  } catch {
-    toast.add({ severity: "error", summary: "Errore", detail: "Impossibile avviare controllo regole", life: 3500 });
-  }
-}
-
-async function triggerAiNow() {
-  try {
-    await prefsStore.triggerAiNow();
-    toast.add({ severity: "success", summary: "Ok", detail: "Controllo AI avviato", life: 2000 });
-  } catch {
-    toast.add({ severity: "error", summary: "Errore", detail: "Impossibile avviare controllo AI", life: 3500 });
-  }
-}
 </script>
 
 <style scoped>
-.settings-wrap {
-  padding: 4px 2px;
+:deep(.p-dropdown) {
+  height: 42px;
 }
 
-.color-input {
-  width: 44px;
-  height: 34px;
-  padding: 0;
-  border-radius: 8px;
+:deep(.p-dropdown .p-dropdown-label) {
+  display: flex;
+  align-items: center;
 }
 </style>

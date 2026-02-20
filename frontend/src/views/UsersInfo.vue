@@ -1,10 +1,9 @@
-<!-- src/views/UsersInfo.vue -->
 <template>
   <div class="card shadow-sm border-0">
-    <div class="card-body">
+    <div class="card-body p-3">
       <Toast />
 
-      <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
+      <div class="d-flex align-items-start justify-content-between mb-3 gap-3">
         <div>
           <h4 class="mb-1">Informazioni utenti</h4>
           <div class="text-muted small">
@@ -15,95 +14,90 @@
         <Button
           label="Ricarica"
           icon="pi pi-refresh"
-          size="small"
           class="p-button-text"
+          size="small"
           :loading="loading"
-          @click="loadUsers"
+          @click="reload"
         />
       </div>
 
-      <div class="row g-3 align-items-end mb-3">
-        <div class="col-12 col-lg-6">
-          <label class="form-label">Ricerca</label>
-          <InputText
-            v-model="query"
-            class="w-100"
-            placeholder="Cerca per nome, cognome o email..."
-          />
-        </div>
+      <div class="mb-3">
+        <div class="fw-semibold mb-1">Ricerca</div>
+        <InputText
+          v-model="q"
+          placeholder="Cerca per nome, cognome o email..."
+          class="w-100"
+          @input="onQueryChange"
+        />
+      </div>
 
-        <div class="col-12 col-lg-6 d-flex justify-content-start justify-content-lg-end gap-2 flex-wrap">
-          <Button
-            label="Mostra risultati"
-            icon="pi pi-list"
-            size="small"
-            :disabled="selectedUsers.length === 0"
-            @click="showSelected = true"
-          />
-          <Button
-            label="Svuota selezione"
-            icon="pi pi-times"
-            size="small"
-            class="p-button-text"
-            :disabled="selectedUsers.length === 0"
-            @click="clearSelection"
-          />
-        </div>
+      <div class="d-flex justify-content-end gap-2 mb-2">
+        <Button
+          label="Mostra risultati"
+          icon="pi pi-list"
+          size="small"
+          :disabled="selectedIds.length === 0"
+          @click="showSelected"
+        />
+        <Button
+          label="Svuota selezione"
+          icon="pi pi-times"
+          class="p-button-text"
+          size="small"
+          :disabled="selectedIds.length === 0"
+          @click="clearSelection"
+        />
       </div>
 
       <DataTable
-        :value="filteredUsers"
+        :value="users"
+        :loading="loading"
         dataKey="_id"
+        responsiveLayout="scroll"
+        class="p-datatable-sm"
         paginator
         :rows="8"
-        :rowsPerPageOptions="[8, 12, 20]"
-        selectionMode="multiple"
-        v-model:selection="selectedUsers"
-        class="p-datatable-sm"
-        responsiveLayout="scroll"
         emptyMessage="Nessun utente trovato."
       >
-        <Column selectionMode="multiple" headerStyle="width:3rem" />
+        <Column selectionMode="multiple" headerStyle="width: 3rem" />
+
         <Column field="name" header="Nome" />
         <Column field="surname" header="Cognome" />
         <Column field="email" header="Email" />
-        <Column header="Status">
+
+        <Column header="Status" style="width: 160px;">
           <template #body="{ data }">
-            <span class="badge" :class="statusClass(data.status)">
-              {{ data.status }}
-            </span>
+            <Tag :value="data.status" :severity="statusSeverity(data.status)" />
           </template>
         </Column>
-        <Column header="Ruolo">
+
+        <Column header="Ruolo" style="width: 220px;">
           <template #body="{ data }">
-            {{ data.role?.name || data.role || "—" }}
+            <span class="fw-semibold">{{ displayRoleLabel(data) }}</span>
           </template>
         </Column>
       </DataTable>
 
-      <div v-if="showSelected && selectedUsers.length" class="mt-4">
-        <h6 class="fw-semibold mb-2">Dettagli utenti selezionati</h6>
+      <div class="mt-4">
+        <h6 class="mb-2">Dettagli utenti selezionati</h6>
 
-        <div class="row g-3">
-          <div class="col-12 col-lg-6" v-for="u in selectedUsers" :key="u._id">
-            <div class="card border-0 bg-light">
-              <div class="card-body">
-                <div class="fw-semibold">{{ u.name }} {{ u.surname }}</div>
-                <div class="text-muted small">{{ u.email }}</div>
+        <div v-if="selectedDetails.length === 0" class="text-muted small">
+          Seleziona uno o più utenti e clicca “Mostra risultati”.
+        </div>
 
-                <div class="mt-2 small">
-                  <div><span class="text-muted">Status:</span> {{ u.status }}</div>
-                  <div><span class="text-muted">Ruolo:</span> {{ u.role?.name || u.role || "—" }}</div>
-                  <div v-if="u.createdAt"><span class="text-muted">Creato:</span> {{ formatDate(u.createdAt) }}</div>
-                  <div v-if="u.lastLoginAt"><span class="text-muted">Ultimo login:</span> {{ formatDate(u.lastLoginAt) }}</div>
-                </div>
-              </div>
+        <div v-else class="d-flex flex-column gap-2">
+          <div v-for="u in selectedDetails" :key="u._id" class="p-3 border rounded bg-light">
+            <div class="fw-semibold">{{ u.name }} {{ u.surname }}</div>
+            <div class="text-muted">{{ u.email }}</div>
+
+            <div class="small mt-2">
+              <div>Status: <span class="fw-semibold">{{ u.status }}</span></div>
+              <div>Ruolo: <span class="fw-semibold">{{ displayRoleLabel(u) }}</span></div>
+              <div>Creato: <span class="fw-semibold">{{ formatDate(u.createdAt) }}</span></div>
             </div>
           </div>
         </div>
-
       </div>
-
     </div>
   </div>
 </template>
@@ -111,81 +105,94 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { useToast } from "primevue/usetoast";
-
 import Toast from "primevue/toast";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
+import Tag from "primevue/tag";
 
 import api from "@/services/api";
 
 const toast = useToast();
 
 const loading = ref(false);
+const q = ref("");
 const users = ref([]);
-const query = ref("");
 
-const selectedUsers = ref([]);
-const showSelected = ref(false);
+const selected = ref([]);
+const selectedDetails = ref([]);
 
-function statusClass(s) {
-  if (s === "active") return "bg-success";
-  if (s === "disabled") return "bg-danger";
-  if (s === "pending") return "bg-warning text-dark";
-  return "bg-secondary";
+const selectedIds = computed(() => (selected.value || []).map((u) => u._id).filter(Boolean));
+
+function isBootstrap(u) {
+  return u?.isBootstrapAdmin === true;
+}
+
+function normalizeRoleNameFromUser(u) {
+  if (isBootstrap(u)) return "admin";
+  const arr = Array.isArray(u?.roles) ? u.roles : [];
+  const first = arr[0]?.roleName || arr[0];
+  if (first) return String(first);
+  return "user_base";
+}
+
+function displayRoleLabel(u) {
+  const r = normalizeRoleNameFromUser(u);
+  if (r === "admin" && isBootstrap(u)) return "admin (bootstrap)";
+  return r;
+}
+
+function statusSeverity(s) {
+  if (s === "active") return "success";
+  if (s === "disabled") return "warning";
+  if (s === "pending") return "info";
+  return "secondary";
 }
 
 function formatDate(d) {
-  try {
-    return new Date(d).toLocaleString();
-  } catch {
-    return d;
-  }
+  if (!d) return "—";
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return String(d);
+  return dt.toLocaleString();
 }
 
-async function loadUsers() {
+let debounceTimer = null;
+function onQueryChange() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => reload(), 250);
+}
+
+async function reload() {
   loading.value = true;
   try {
-    const res = await api.get("/users");
-    users.value = res?.data || [];
-  } catch {
-    toast.add({ severity: "error", summary: "Errore", detail: "Impossibile caricare utenti", life: 3500 });
+    // backend supporta /api/v1/users/search?q=...
+    // se q è vuota, il backend ritorna comunque una lista (gestita lato backend)
+    const res = await api.get("/users/search", { params: { q: q.value || "" } });
+    users.value = Array.isArray(res.data) ? res.data : [];
+  } catch (e) {
+    toast.add({
+      severity: "error",
+      summary: "Errore",
+      detail: e?.response?.data?.message || "Impossibile caricare utenti",
+      life: 3500,
+    });
   } finally {
     loading.value = false;
   }
 }
 
+function showSelected() {
+  const ids = new Set(selectedIds.value);
+  selectedDetails.value = (users.value || []).filter((u) => ids.has(u._id));
+}
+
 function clearSelection() {
-  selectedUsers.value = [];
-  showSelected.value = false;
+  selected.value = [];
+  selectedDetails.value = [];
 }
 
-const filteredUsers = computed(() => {
-  const qv = (query.value || "").trim().toLowerCase();
-  if (!qv) return users.value;
-
-  return users.value.filter((u) => {
-    const name = `${u.name || ""} ${u.surname || ""}`.toLowerCase();
-    const email = (u.email || "").toLowerCase();
-    return name.includes(qv) || email.includes(qv);
-  });
+onMounted(() => {
+  reload();
 });
-
-onMounted(loadUsers);
 </script>
-
-<style scoped>
-.badge {
-  padding: 0.35rem 0.55rem;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  font-size: 0.8rem;
-  color: white;
-}
-
-/* input coerente con gli altri */
-:deep(.p-inputtext) {
-  height: 42px;
-}
-</style>

@@ -40,6 +40,19 @@ export async function updateBuilding(req, buildingId, patch) {
 export async function getAllBuildingsWithStats(req, { sortBy, order, includeInactive }) {
   const { Building, Asset, Rule } = getTenantModels(req);
 
+  // UI helper: per la tabella "visualizza edifici" il frontend mostra se l'edificio
+  // è già associato all'utente corrente.
+  // - Se l'utente eredita tutti gli edifici -> sempre true
+  // - Altrimenti -> true se _id è presente in user.buildingIds
+  const inheritAll = Boolean(req.user?.inheritAllBuildings) || userHasPermission(req, "buildings:inherit_all");
+  const rawUserIds = Array.isArray(req.user?.buildingIds) ? req.user.buildingIds : [];
+  const associatedIds = inheritAll
+    ? []
+    : rawUserIds
+        .map(String)
+        .filter((id) => mongoose.isValidObjectId(id))
+        .map((id) => new mongoose.Types.ObjectId(id));
+
   const assetCol = Asset.collection.name;
   const ruleCol = Rule.collection.name;
 
@@ -47,6 +60,12 @@ export async function getAllBuildingsWithStats(req, { sortBy, order, includeInac
 
   const pipeline = [
     { $match: match },
+    // flag association per UX (richiesta assegnazione / edit)
+    {
+      $addFields: {
+        isAssociated: inheritAll ? true : { $in: ["$_id", associatedIds] },
+      },
+    },
     {
       $lookup: {
         from: assetCol,

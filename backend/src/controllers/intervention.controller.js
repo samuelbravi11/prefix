@@ -95,17 +95,31 @@ export async function getInterventions(req, res) {
     const requestedBuildingIds = buildingIds.length ? buildingIds : accessible;
     ensureSubset(requestedBuildingIds, accessible);
 
-    const query = getInterventionsQuery({
-      buildingIds: requestedBuildingIds,
-      assetIds,
-      from: req.query.from,
-      to: req.query.to,
-      type: req.query.type,
-      outcome: req.query.outcome,
-      severity: req.query.severity,
-    });
+    // IMPORTANT:
+    // In una versione precedente getInterventionsQuery() restituiva un Promise/Array
+    // e veniva passato direttamente a find(), causando:
+    // "Parameter \"filter\" to find() must be an object, got [object Promise]".
+    // Qui costruiamo un filter sincrono e sicuro.
 
-    const items = await Intervention.find(query).sort({ performedAt: -1, _id: 1 }).lean();
+    const filter = {};
+
+    // building scoping (sempre)
+    filter.buildingId = { $in: requestedBuildingIds };
+
+    // asset scoping (opzionale)
+    if (assetIds.length) filter.assetId = { $in: assetIds };
+
+    // optional attributes
+    if (req.query.type) filter.type = String(req.query.type);
+    if (req.query.outcome) filter.outcome = String(req.query.outcome);
+    if (req.query.severity) filter.severity = String(req.query.severity);
+
+    const from = req.query.from ? new Date(String(req.query.from)) : null;
+    const to = req.query.to ? new Date(String(req.query.to)) : null;
+    if (from && !Number.isNaN(from.getTime())) filter.performedAt = { ...(filter.performedAt || {}), $gte: from };
+    if (to && !Number.isNaN(to.getTime())) filter.performedAt = { ...(filter.performedAt || {}), $lte: to };
+
+    const items = await Intervention.find(filter).sort({ performedAt: -1, _id: 1 }).lean();
     return res.json(items);
   } catch (err) {
     const status = err.status || 500;
@@ -146,13 +160,16 @@ export async function getInterventionsTable(req, res) {
     const requestedBuildingIds = buildingIds.length ? buildingIds : accessible;
     ensureSubset(requestedBuildingIds, accessible);
 
-    const query = getInterventionsTableQuery({
-      buildingIds: requestedBuildingIds,
-      from: req.query.from,
-      to: req.query.to,
-    });
+    // vedi nota in getInterventions(): le funzioni repository ritornavano risultati,
+    // non un filter. Costruiamo un filter standard e restituiamo {total, items}.
+    const filter = { buildingId: { $in: requestedBuildingIds } };
 
-    const items = await Intervention.find(query).sort({ performedAt: -1, _id: 1 }).lean();
+    const from = req.query.from ? new Date(String(req.query.from)) : null;
+    const to = req.query.to ? new Date(String(req.query.to)) : null;
+    if (from && !Number.isNaN(from.getTime())) filter.performedAt = { ...(filter.performedAt || {}), $gte: from };
+    if (to && !Number.isNaN(to.getTime())) filter.performedAt = { ...(filter.performedAt || {}), $lte: to };
+
+    const items = await Intervention.find(filter).sort({ performedAt: -1, _id: 1 }).lean();
     return res.json({ total: items.length, items });
   } catch (err) {
     const status = err.status || 500;

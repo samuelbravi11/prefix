@@ -1,7 +1,7 @@
 <template>
   <NoPermissions
     v-if="!canEnter"
-    hint="Permessi richiesti: users:pending:view/users:active:view e (users:pending:approve, users:status:update, users:role:update)"
+    hint="Permessi richiesti: users:pending:view/users:active:view e (users:approve, users:update_status, users:update_role)"
   />
 
   <div v-else class="card shadow-sm border-0">
@@ -31,7 +31,13 @@
         <template #start>
           <div class="d-flex gap-2 align-items-center flex-wrap">
             <span class="fw-semibold small">Modalità:</span>
-            <Dropdown v-model="mode" :options="modes" optionLabel="label" optionValue="value" class="w-14rem p-inputtext-sm" />
+            <Dropdown
+              v-model="mode"
+              :options="modes"
+              optionLabel="label"
+              optionValue="value"
+              class="w-14rem p-inputtext-sm"
+            />
           </div>
         </template>
 
@@ -120,80 +126,68 @@
           <Column field="surname" header="Cognome" />
           <Column field="email" header="Email" />
 
-          <Column header="Status" style="width: 130px;">
+          <Column header="Status" style="width: 260px;">
             <template #body="{ data }">
-              <Tag :value="data.status" :severity="statusSeverity(data.status)" />
+              <div>
+                <Tag :value="statusDraft[data._id] || data.status" :severity="statusSeverity(statusDraft[data._id] || data.status)" />
+
+                <div class="mt-2">
+                  <Dropdown
+                    v-if="!isBootstrap(data)"
+                    v-model="statusDraft[data._id]"
+                    :options="statusOptions"
+                    optionLabel="label"
+                    optionValue="value"
+                    class="w-14rem p-inputtext-sm"
+                    placeholder="Status"
+                    :disabled="!canUpdateStatus"
+                  />
+                </div>
+
+                <div v-if="isBootstrap(data)" class="text-muted small mt-1">
+                  Bootstrap admin: status protetto.
+                </div>
+              </div>
             </template>
           </Column>
 
-          <Column header="Ruolo" style="width: 220px;">
+          <Column header="Ruolo" style="width: 260px;">
             <template #body="{ data }">
-              <Dropdown
-                v-model="roleDraft[data._id]"
-                :options="roleOptions"
-                optionLabel="label"
-                optionValue="value"
-                class="w-14rem p-inputtext-sm"
-                placeholder="Ruolo"
-                :disabled="!canUpdateRole || (data.isBootstrapAdmin === true)"
+              <template v-if="isBootstrap(data)">
+                <div class="fw-semibold">
+                  {{ formatRoleLabel(data.roleName, data.isBootstrapAdmin) }}
+                </div>
+                <div class="text-muted small mt-1">Bootstrap admin: ruolo protetto.</div>
+              </template>
+
+              <template v-else>
+                <Dropdown
+                  v-model="roleDraft[data._id]"
+                  :options="roleOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  class="w-14rem p-inputtext-sm"
+                  placeholder="Ruolo"
+                  :disabled="!canUpdateRole"
+                />
+              </template>
+            </template>
+          </Column>
+
+          <Column header="Azioni" style="width: 160px;">
+            <template #body="{ data }">
+              <Button
+                label="Salva"
+                icon="pi pi-save"
+                severity="primary"
+                :disabled="isBootstrap(data) || rowBusy[data._id] === true || !isRowDirty(data) || (!canUpdateRole && !canUpdateStatus)"
+                :loading="rowBusy[data._id] === true"
+                size="small"
+                @click="confirmSaveRow(data)"
               />
-              <div v-if="data.isBootstrapAdmin === true" class="text-muted small mt-1">
-                Bootstrap admin: ruolo protetto.
-              </div>
-            </template>
-          </Column>
-
-          <Column header="Azioni" style="width: 420px;">
-            <template #body="{ data }">
-              <div class="d-flex gap-2 align-items-center flex-wrap">
-                <Button
-                  label="Salva ruolo"
-                  icon="pi pi-save"
-                  severity="primary"
-                  :disabled="!canUpdateRole || data.isBootstrapAdmin === true || !isRoleChanged(data)"
-                  :loading="rowBusy[data._id] === true"
-                  size="small"
-                  @click="confirmSaveRole(data)"
-                />
-
-                <Button
-                  v-if="data.status === 'active'"
-                  label="Disattiva"
-                  icon="pi pi-ban"
-                  severity="warning"
-                  :disabled="!canUpdateStatus"
-                  :loading="rowBusy[data._id] === true"
-                  size="small"
-                  @click="confirmToggleStatus(data)"
-                />
-                <Button
-                  v-else
-                  label="Riattiva"
-                  icon="pi pi-check-circle"
-                  severity="success"
-                  :disabled="!canUpdateStatus"
-                  :loading="rowBusy[data._id] === true"
-                  size="small"
-                  @click="confirmToggleStatus(data)"
-                />
-
-                <Button
-                  label="Salva entrambi"
-                  icon="pi pi-sync"
-                  severity="secondary"
-                  :disabled="!canUpdateStatus || !canUpdateRole || data.isBootstrapAdmin === true || !isRoleChanged(data)"
-                  :loading="rowBusy[data._id] === true"
-                  size="small"
-                  @click="confirmSaveBoth(data)"
-                />
-              </div>
             </template>
           </Column>
         </DataTable>
-
-        <div class="text-muted mt-2 small">
-          Nota: “Salva entrambi” esegue 2 chiamate: <code>PATCH /users/:id/role</code> e <code>PATCH /users/:id/status</code>.
-        </div>
       </div>
     </div>
   </div>
@@ -220,12 +214,12 @@ const confirm = useConfirm();
 const { hasAny, hasPermission } = usePermissions();
 
 const canEnter = computed(() =>
-  hasAny(["users:pending:view", "users:active:view", "users:pending:approve", "users:status:update", "users:role:update"])
+  hasAny(["users:pending:view", "users:active:view", "users:approve", "users:update_status", "users:update_role"])
 );
 
-const canApprovePending = computed(() => hasPermission("users:pending:approve"));
-const canUpdateStatus = computed(() => hasPermission("users:status:update"));
-const canUpdateRole = computed(() => hasPermission("users:role:update"));
+const canApprovePending = computed(() => hasPermission("users:approve"));
+const canUpdateStatus = computed(() => hasPermission("users:update_status"));
+const canUpdateRole = computed(() => hasPermission("users:update_role"));
 
 const loading = ref(false);
 const globalFilter = ref("");
@@ -247,20 +241,44 @@ const roleOptions = ref([
 
 const approveRoleDraft = reactive({});
 const roleDraft = reactive({});
+const statusDraft = reactive({});
 const rowBusy = reactive({});
+
+const statusOptions = [
+  { label: "active", value: "active" },
+  { label: "disabled", value: "disabled" },
+];
 
 function normalize(s) {
   return String(s || "").toLowerCase().trim();
 }
+
 function getRoleName(u) {
-  const r = u.roles?.[0];
+  // backend espone roleName direttamente; fallback per versioni precedenti
+  if (u?.roleName) return u.roleName;
+  const r = u?.roles?.[0];
   return typeof r === "string" ? r : r?.roleName;
 }
+
+function formatRoleLabel(roleName, isBootstrapAdmin) {
+  const base = roleName || "user_base";
+  return isBootstrapAdmin ? `${base} (bootstrap)` : base;
+}
+
 function statusSeverity(status) {
   if (status === "active") return "success";
   if (status === "disabled") return "danger";
   if (status === "pending") return "warning";
   return "info";
+}
+
+function isBootstrap(u) {
+  return u?.isBootstrapAdmin === true;
+}
+
+// UX: bootstrap non deve cambiare stato (né disattiva né riattiva)
+function isStatusChangeBlocked(u) {
+  return isBootstrap(u);
 }
 
 const pendingUsersFiltered = computed(() => {
@@ -285,13 +303,29 @@ function isRoleChanged(user) {
   return draft !== current;
 }
 
+function isStatusChanged(user) {
+  const current = user.status;
+  const draft = statusDraft[user._id] || current;
+  return draft !== current;
+}
+
+function isRowDirty(user) {
+  return isRoleChanged(user) || isStatusChanged(user);
+}
+
 async function loadRoles() {
   try {
     const res = await api.get("/roles");
     const roles = Array.isArray(res.data) ? res.data : [];
-    const opts = roles
+    let opts = roles
       .map((r) => ({ label: r.roleName, value: r.roleName }))
       .sort((a, b) => a.label.localeCompare(b.label));
+
+    // garantisci che i due ruoli base esistano sempre in UI
+    const required = ["admin", "user_base"];
+    for (const rn of required) {
+      if (!opts.some((o) => o.value === rn)) opts.unshift({ label: rn, value: rn });
+    }
     if (opts.length) roleOptions.value = opts;
   } catch {
     // fallback: lascia roleOptions default
@@ -312,6 +346,7 @@ async function reloadAll() {
     }
     for (const u of managedUsers.value) {
       if (!(u._id in roleDraft)) roleDraft[u._id] = getRoleName(u) || "user_base";
+      if (!(u._id in statusDraft)) statusDraft[u._id] = u.status;
     }
   } catch (err) {
     toast.add({
@@ -323,6 +358,49 @@ async function reloadAll() {
   } finally {
     loading.value = false;
   }
+}
+
+function confirmSaveRow(user) {
+  if (isBootstrap(user)) return;
+
+  const nextRole = roleDraft[user._id] || getRoleName(user) || "user_base";
+  const nextStatus = statusDraft[user._id] || user.status;
+
+  const changes = [];
+  if (isRoleChanged(user)) changes.push(`ruolo → ${nextRole}`);
+  if (isStatusChanged(user)) changes.push(`status → ${nextStatus}`);
+
+  confirm.require({
+    message: `Salvare modifiche per ${user.email}? (${changes.join(", ")})`,
+    header: "Conferma",
+    icon: "pi pi-exclamation-triangle",
+    acceptLabel: "Salva",
+    rejectLabel: "Annulla",
+    accept: async () => {
+      setRowBusy(user._id, true);
+      try {
+        // salva solo ciò che è cambiato
+        if (isRoleChanged(user) && canUpdateRole.value) {
+          await updateUserRole(user._id, nextRole);
+        }
+        if (isStatusChanged(user) && canUpdateStatus.value) {
+          await updateUserStatus(user._id, nextStatus);
+        }
+
+        toast.add({ severity: "success", summary: "Ok", detail: "Salvato", life: 2200 });
+        await reloadAll();
+      } catch (err) {
+        toast.add({
+          severity: "error",
+          summary: "Errore",
+          detail: err?.response?.data?.message || "Salvataggio fallito",
+          life: 3500,
+        });
+      } finally {
+        setRowBusy(user._id, false);
+      }
+    },
+  });
 }
 
 function confirmApprove(user) {
@@ -345,97 +423,6 @@ function confirmApprove(user) {
           severity: "error",
           summary: "Errore",
           detail: err?.response?.data?.message || "Approva fallita",
-          life: 3500,
-        });
-      } finally {
-        setRowBusy(user._id, false);
-      }
-    },
-  });
-}
-
-function confirmSaveRole(user) {
-  const nextRole = roleDraft[user._id] || getRoleName(user) || "user_base";
-
-  confirm.require({
-    message: `Salvare il ruolo "${nextRole}" per ${user.email}?`,
-    header: "Conferma",
-    icon: "pi pi-exclamation-triangle",
-    acceptLabel: "Salva",
-    rejectLabel: "Annulla",
-    accept: async () => {
-      setRowBusy(user._id, true);
-      try {
-        await updateUserRole(user._id, nextRole);
-        toast.add({ severity: "success", summary: "Ok", detail: "Ruolo aggiornato", life: 2500 });
-        await reloadAll();
-      } catch (err) {
-        toast.add({
-          severity: "error",
-          summary: "Errore",
-          detail: err?.response?.data?.message || "Aggiornamento fallito",
-          life: 3500,
-        });
-      } finally {
-        setRowBusy(user._id, false);
-      }
-    },
-  });
-}
-
-function confirmToggleStatus(user) {
-  const nextStatus = user.status === "active" ? "disabled" : "active";
-
-  confirm.require({
-    message: `Impostare lo stato di ${user.email} su "${nextStatus}"?`,
-    header: "Conferma",
-    icon: "pi pi-exclamation-triangle",
-    acceptLabel: "Conferma",
-    rejectLabel: "Annulla",
-    accept: async () => {
-      setRowBusy(user._id, true);
-      try {
-        await updateUserStatus(user._id, nextStatus);
-        toast.add({ severity: "success", summary: "Ok", detail: "Stato aggiornato", life: 2500 });
-        await reloadAll();
-      } catch (err) {
-        toast.add({
-          severity: "error",
-          summary: "Errore",
-          detail: err?.response?.data?.message || "Aggiornamento fallito",
-          life: 3500,
-        });
-      } finally {
-        setRowBusy(user._id, false);
-      }
-    },
-  });
-}
-
-function confirmSaveBoth(user) {
-  const nextRole = roleDraft[user._id] || getRoleName(user) || "user_base";
-  const nextStatus = user.status === "active" ? "disabled" : "active";
-
-  confirm.require({
-    message: `Salvare ruolo "${nextRole}" e impostare status "${nextStatus}" per ${user.email}?`,
-    header: "Conferma",
-    icon: "pi pi-exclamation-triangle",
-    acceptLabel: "Conferma",
-    rejectLabel: "Annulla",
-    accept: async () => {
-      setRowBusy(user._id, true);
-      try {
-        // Mantengo l’operazione stabile: prima ruolo poi status (così eventuali policy sul ruolo sono immediate)
-        await updateUserRole(user._id, nextRole);
-        await updateUserStatus(user._id, nextStatus);
-
-        toast.add({ severity: "success", summary: "Ok", detail: "Aggiornamento completato", life: 2500 });
-        await reloadAll();
-      } catch (err) {
-        toast.add({
-          severity: "error",
-          summary: "Errore",
-          detail: err?.response?.data?.message || "Aggiornamento fallito",
           life: 3500,
         });
       } finally {

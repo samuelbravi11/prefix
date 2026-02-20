@@ -98,7 +98,7 @@
 
         <!-- Gestione utenti (generica - include anche Ruoli) -->
         <li
-          v-if="canAny(['users:manage','users:status:update','users:role:update','requests:manage','users:info:view','roles:manage'])"
+          v-if="canAny(['users:active:view','users:update_status','users:update_role','users:approve','requests:manage','users:info:view','roles:manage'])"
           class="nav-item"
         >
           <router-link
@@ -204,7 +204,7 @@
 
           <!-- UTENTI -->
           <template v-if="route.path === '/gestione-utenti'">
-            <li v-if="canAny(['users:manage','users:status:update','users:role:update'])" class="nav-item">
+            <li v-if="canAny(['users:active:view','users:update_status','users:update_role','users:approve'])" class="nav-item">
               <a
                 href="#gestione-stato-ruolo"
                 class="nav-link sidebar-link"
@@ -218,7 +218,7 @@
               </a>
             </li>
 
-            <li v-if="canAny(['requests:manage','users:building:update','users:building:view'])" class="nav-item">
+            <li v-if="canAny(['requests:manage','users:buildings:update','users:buildings:view'])" class="nav-item">
               <a
                 href="#assegnazione-edifici"
                 class="nav-link sidebar-link"

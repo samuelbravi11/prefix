@@ -19,6 +19,13 @@ function extractTenantSlug(host, baseDomain) {
 
 export default async function tenantContext(req, res, next) {
   try {
+    // Le route di provisioning piattaforma non dipendono da un tenant e devono funzionare
+    // anche senza subdomain (es: http://localhost/api/v1/platform/tenants)
+    if (req.path?.startsWith("/api/v1/platform")) {
+      req.tenant = null;
+      return next();
+    }
+
     const baseDomain = process.env.BASE_DOMAIN;
     if (!baseDomain) throw new Error("Missing BASE_DOMAIN env");
 

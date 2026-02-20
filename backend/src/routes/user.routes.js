@@ -15,14 +15,18 @@ router.get("/search", userController.searchUsers);
 // GET /api/v1/users/pending
 router.get("/pending", userController.getPendingUsers);
 
+// alias compat /api/v1/users/managed
+router.get("/managed", userController.getManagedUsers);
+
 // GET /api/v1/users/buildings?missing=true
 router.get("/buildings", userController.getUsersBuildings);
 
 // GET /api/v1/users
 router.get("/", userController.getManagedUsers);
 
-// PATCH /api/v1/users/:id/approve
+// FIX: approve supporta PATCH (principale) + POST (compat vecchie build)
 router.patch("/:id/approve", userController.approvePendingUser);
+router.post("/:id/approve", userController.approvePendingUser);
 
 // PATCH /api/v1/users/:id/role
 router.patch("/:id/role", userController.updateUserRole);

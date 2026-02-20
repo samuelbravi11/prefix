@@ -24,4 +24,5 @@ export const fetchUsersBuildings = (params = {}) => api.get("/users/buildings", 
 export const updateUserBuildings = (userId, buildingIds) => api.patch(`/users/${userId}/buildings`, { buildingIds });
 
 // list buildings (for dropdown)
-export const fetchAllBuildings = () => api.get("/buildings");
+// Per amministrazione/gestione richieste serve la lista completa, non solo "my buildings"
+export const fetchAllBuildings = (params = {}) => api.get("/buildings/all", { params });

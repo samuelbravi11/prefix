@@ -14,6 +14,7 @@ import interventionRoutes from "./routes/intervention.routes.js";
 import assetRoutes from "./routes/asset.routes.js";
 import ruleRoutes from "./routes/rule.routes.js";
 import roleRoutes from "./routes/role.routes.js";
+import categoryRoutes from "./routes/category.routes.js"
 // import calendarRoutes from "./routes/calendar.routes.js";
 import tenantProvisionRoutes from "./routes/tenantProvision.routes.js"
 
@@ -28,15 +29,6 @@ import requireInternalProxyAndInjectUserId from "./middleware/requireInternalPro
 import tenantContext from "./middleware/tenantContext.middleware.js";
 
 const app = express();
-
-// CORS 
-/* --- IGNORE ---
-app.use(cors({
-  origin: ["http://localhost:5173", "http://127.0.0.1:5173", "http://lvh.me:5173", "http://test12.lvh.me:5173"],
-  credentials: true,
-  exposedHeaders: ['set-cookie'] // Permetti al frontend di vedere i cookie
-}));
-*/
 
 //DEBUG MIDDLEWARE
 app.use((req, res, next) => {
@@ -66,6 +58,19 @@ app.use(cookieParser());
 app.use(requestLogger);
 
 // ====================================================
+// PROXY SIGNATURE – blocca accessi diretti
+// (deve valere anche per /auth, /rbac/decide e /api/v1/platform)
+// ====================================================
+app.use(requireInternalProxyAndInjectUserId);
+
+// ====================================================
+// ROUTES DI PIATTAFORMA (NO TENANT CONTEXT)
+// - provisioning tenant deve funzionare anche senza subdomain
+// - protetto da x-platform-seed-key nel relativo router
+// ====================================================
+app.use("/api/v1/platform", tenantProvisionRoutes);
+
+// ====================================================
 // TENANT CONTEXT – solo da qui in poi serve tenant
 // ====================================================
 app.use(tenantContext);
@@ -86,14 +91,6 @@ app.use("/auth", authRoutes);
   Se è DENY, la richiesta viene bloccata e l’API non viene mai eseguita.
 */
 app.post("/rbac/decide", rbacDecisionController);
-
-app.use("/api/v1/platform", tenantProvisionRoutes);
-
-
-// ====================================================
-// PROXY SIGNATURE – blocca accessi diretti
-// ====================================================
-app.use(requireInternalProxyAndInjectUserId);
 
 
 // HEALTH / ROOT per verifica funzionamento
@@ -142,6 +139,7 @@ app.use("/api/v1", roleRoutes);
 // preferences + manual triggers (MVP)
 app.use("/api/v1/preferences", preferencesRoutes);
 app.use("/api/v1/scheduler", schedulerRoutes);
+app.use("/api/v1/categories", categoryRoutes);
 
 
 export default app;

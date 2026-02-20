@@ -141,6 +141,10 @@ export const approvePendingUser = async (req, res) => {
    UPDATE ROLE
    PATCH /api/v1/users/:id/role
    Body: { roleName: string }
+
+   REGOLE:
+   - un bootstrap admin NON può cambiare ruolo (mai)
+   - inoltre: è impossibile cambiare il ruolo di me stesso se e solo se sono bootstrap user (già incluso)
 ========================================================= */
 export const updateUserRole = async (req, res) => {
   try {
@@ -150,17 +154,26 @@ export const updateUserRole = async (req, res) => {
     const roleName = String(rawRoleName || "").trim();
     if (!roleName) return res.status(400).json({ message: "roleName mancante" });
 
-    // ✅ Vincolo richiesto: bootstrap admin non può cambiare il proprio ruolo
-    if (req.user?.isBootstrapAdmin === true && String(req.user?._id) === String(id)) {
-      return res.status(403).json({
-        message: "Non puoi cambiare il tuo ruolo (bootstrap admin).",
-      });
-    }
-
     const { User, Role } = getTenantModels(req);
 
     const user = await User.findById(id);
     if (!user) return res.status(404).json({ message: "Utente non trovato" });
+
+    // ✅ REGOLA: il bootstrap admin NON può subire cambio ruolo (da nessuno)
+    if (user.isBootstrapAdmin === true) {
+      return res.status(403).json({
+        message: "Non puoi cambiare il ruolo di un bootstrap admin.",
+      });
+    }
+
+    // ✅ REGOLA precedente (rimane coerente): se sto cambiando me stesso e sono bootstrap -> vietato
+    // (ridondante con quella sopra se il target fosse bootstrap, ma la lasciamo per chiarezza logica)
+    const isSelf = String(req.user?._id) === String(id);
+    if (isSelf && req.user?.isBootstrapAdmin === true) {
+      return res.status(403).json({
+        message: "Non puoi cambiare il tuo ruolo (bootstrap user).",
+      });
+    }
 
     if (user.status === "pending") {
       return res.status(409).json({
@@ -186,10 +199,14 @@ export const updateUserRole = async (req, res) => {
   }
 };
 
+
 /* =========================================================
    UPDATE STATUS (active <-> disabled)
    PATCH /api/v1/users/:id/status
    Body: { status: "active" | "disabled" }
+
+   REGOLE:
+   - un bootstrap admin NON può essere disattivato (no active->disabled)
 ========================================================= */
 export const updateUserStatus = async (req, res) => {
   try {
@@ -228,6 +245,13 @@ export const updateUserStatus = async (req, res) => {
       return res.status(409).json({
         message: "Utente 'pending': usa /approve per attivarlo e (opzionalmente) assegnare il ruolo.",
         currentStatus: user.status,
+      });
+    }
+
+    // ✅ REGOLA: bootstrap admin non può essere disattivato
+    if (user.isBootstrapAdmin === true && status === "disabled") {
+      return res.status(403).json({
+        message: "Non puoi disattivare un bootstrap admin.",
       });
     }
 

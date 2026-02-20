@@ -33,65 +33,102 @@ import {
   verifyLoginChallengeToken,
 } from "../services/token.service.js";
 
-function setRefreshTokenCookie(res, refreshToken) {
+/**
+ * Cookie strategy:
+ * - Behind nginx, trust X-Forwarded-Proto to decide secure cookies.
+ * - On HTTP (dev): SameSite=Lax, Secure=false (browser accepts cookies).
+ * - On HTTPS (prod): SameSite=None, Secure=true (needed for cross-site scenarios).
+ *
+ * Domain strategy:
+ * - If COOKIE_DOMAIN is set -> use it (e.g. ".lvh.me" or ".example.com").
+ * - Else:
+ *   - dev -> do NOT set domain (host-only cookie, safest for local).
+ *   - prod -> if BASE_DOMAIN exists -> use ".<BASE_DOMAIN>".
+ */
+function getCookieMeta(req) {
+  const xfProto = String(req.headers["x-forwarded-proto"] || "").toLowerCase();
+  const isHttps = xfProto === "https";
+
   const isProd = process.env.NODE_ENV === "production";
+
+  const cookieDomainEnv = (process.env.COOKIE_DOMAIN || "").trim();
+  const baseDomain = (process.env.BASE_DOMAIN || "").trim();
+
+  const domain =
+    cookieDomainEnv ||
+    (!isProd ? undefined : baseDomain ? `.${baseDomain}` : undefined);
+
+  const secure = isHttps;
+  const sameSite = isHttps ? "None" : "Lax";
+
+  return { secure, sameSite, domain };
+}
+
+function setRefreshTokenCookie(req, res, refreshToken) {
+  const { secure, sameSite, domain } = getCookieMeta(req);
 
   res.cookie("refreshToken", refreshToken, {
     httpOnly: true,
-    secure: isProd,          // in dev false (http)
-    sameSite: "lax",         // ok per same-origin
+    secure,
+    sameSite,
+    domain,
     path: "/auth",
-    maxAge: 24 * 60 * 60 * 1000,  // 1d
+    maxAge: 24 * 60 * 60 * 1000, // 1d
   });
 }
 
-function setAccessTokenCookie(res, accessToken) {
-  const isProd = process.env.NODE_ENV === "production";
+function setAccessTokenCookie(req, res, accessToken) {
+  const { secure, sameSite, domain } = getCookieMeta(req);
 
   // accessToken serve su tutte le API protette (proxy)
   res.cookie("accessToken", accessToken, {
     httpOnly: true,
-    secure: isProd,          // in dev false (http)
-    sameSite: "lax",
+    secure,
+    sameSite,
+    domain,
     path: "/",
-    maxAge: 15 * 60 * 1000,  // 15m
+    maxAge: 15 * 60 * 1000, // 15m
   });
 }
 
-function setCsrfTokenCookie(res, csrfToken) {
-  const isProd = process.env.NODE_ENV === "production";
+function setCsrfTokenCookie(req, res, csrfToken) {
+  const { secure, sameSite, domain } = getCookieMeta(req);
 
   // NON HttpOnly: il frontend deve leggerlo e rimandarlo in header X-CSRF-Token
   res.cookie("csrfToken", csrfToken, {
     httpOnly: false,
-    secure: isProd,
-    sameSite: "lax",
+    secure,
+    sameSite,
+    domain,
     path: "/",
-    maxAge: 24 * 60 * 60 * 1000,  // 1d
+    maxAge: 24 * 60 * 60 * 1000, // 1d
   });
 }
 
-function clearAuthCookies(res) {
-  const isProd = process.env.NODE_ENV === "production";
+function clearAuthCookies(req, res) {
+  const { secure, sameSite, domain } = getCookieMeta(req);
 
   res.clearCookie("accessToken", {
     httpOnly: true,
-    sameSite: "lax",
-    secure: isProd,
+    sameSite,
+    secure,
+    domain,
     path: "/",
   });
 
   res.clearCookie("csrfToken", {
     httpOnly: false,
-    sameSite: "lax",
-    secure: isProd,
+    sameSite,
+    secure,
+    domain,
     path: "/",
   });
 
   res.clearCookie("refreshToken", {
     httpOnly: true,
-    sameSite: "lax",
-    secure: isProd,
+    sameSite,
+    secure,
+    domain,
     path: "/auth",
   });
 }
@@ -101,7 +138,6 @@ function clearAuthCookies(res) {
  * Serve per prevenire confusione cross-tenant (subdomain diverso).
  */
 function assertUserTenantMatch(req, userDoc) {
-  // se nel tuo schema User tenantId è required, questa check è sempre valida
   if (!req.tenant?.tenantId) return false;
   if (!userDoc?.tenantId) return false;
   return String(userDoc.tenantId) === String(req.tenant.tenantId);
@@ -248,17 +284,13 @@ export async function totpSetup(req, res) {
       return res.status(403).json({ message: "Tenant mismatch" });
     }
 
-    // generateTotpSecret vuole { email, issuer }
     const issuer = process.env.TOTP_ISSUER || "PreFix";
     const secretObj = generateTotpSecret({ email: user.email, issuer });
 
-    // salva nel DB il secret base32 cifrato
     applyTotpSecretToUser(user, secretObj.base32);
 
-    // setup token breve { token, expiresAt }
     const { token: setupToken } = createAndApplyTotpSetupToken(user);
 
-    // buildQrCodeDataUrl vuole l'otpauth_url
     const qrDataUrl = await buildQrCodeDataUrl(secretObj.otpauth_url);
 
     await user.save();
@@ -302,7 +334,6 @@ export async function totpVerify(req, res) {
       return res.status(403).json({ message: "Tenant mismatch" });
     }
 
-    // verifyTotpSetupToken ritorna boolean, non throw
     const okToken = verifyTotpSetupToken(user, totpSetupToken);
     if (!okToken) {
       return res.status(401).json({ message: "TOTP setup token non valido o scaduto" });
@@ -313,12 +344,9 @@ export async function totpVerify(req, res) {
 
     user.totpEnabled = true;
 
-    // pulizia token setup (consigliato)
     user.totpSetupTokenHash = undefined;
     user.totpSetupTokenExpiresAt = undefined;
 
-    // se bootstrap --> active direttamente
-    // else --> pending (admin deve attivare)
     if (user.isBootstrapAdmin === true) {
       user.status = "active";
     } else {
@@ -376,7 +404,6 @@ export async function loginStart(req, res) {
       return res.status(403).json({ message: "TOTP non abilitato" });
     }
 
-    // challenge token breve
     const challengeToken = await generateLoginChallengeToken({
       userId: user._id.toString(),
       tenantId: req.tenant.tenantId,
@@ -417,7 +444,6 @@ export async function loginVerifyTotp(req, res) {
       return res.status(401).json({ message: e.message });
     }
 
-    // check tenant inside token (extra hardening)
     if (String(challengePayload.tenantId) !== String(req.tenant.tenantId)) {
       return res.status(403).json({ message: "Tenant mismatch" });
     }
@@ -454,7 +480,6 @@ export async function loginVerifyTotp(req, res) {
       return res.status(400).json({ message: "Invalid TOTP code" });
     }
 
-    // OK: genera tokens come facevi prima
     const payload = { userId: user._id.toString(), status: user.status };
 
     const accessToken = await generateAccessToken(payload);
@@ -462,18 +487,15 @@ export async function loginVerifyTotp(req, res) {
 
     await userService.addRefreshToken(User, user._id, refreshToken, fingerprintHash);
 
-    // Cookies
-    setRefreshTokenCookie(res, refreshToken);
-    setAccessTokenCookie(res, accessToken);
+    setRefreshTokenCookie(req, res, refreshToken);
+    setAccessTokenCookie(req, res, accessToken);
 
-    // CSRF token (double-submit cookie)
     const csrfToken = crypto.randomBytes(32).toString("hex");
-    setCsrfTokenCookie(res, csrfToken);
+    setCsrfTokenCookie(req, res, csrfToken);
 
     return res.json({
       message: "Login effettuato",
-      // accessToken lasciato SOLO per debug/compat, ma il frontend NON deve salvarlo
-      accessToken,
+      accessToken, // solo debug/compat
       user: { id: user._id, email: user.email },
     });
   } catch (err) {
@@ -508,19 +530,16 @@ export async function refresh(req, res) {
       return res.status(401).json({ message: "Refresh token non valido o scaduto" });
     }
 
-    // tenant-aware user lookup
     const { User } = await getTenantModels(req);
     const user = await User.findById(payload.userId);
     if (!user || user.status !== "active") {
       return res.status(403).json({ message: "Account non valido" });
     }
 
-    // cross-tenant protection
     if (!assertUserTenantMatch(req, user)) {
       return res.status(403).json({ message: "Tenant mismatch" });
     }
 
-    // mantieni payload coerente con login
     const newRefreshToken = await generateRefreshToken({
       userId: user._id.toString(),
       status: user.status,
@@ -543,13 +562,12 @@ export async function refresh(req, res) {
       status: user.status,
     });
 
-    setRefreshTokenCookie(res, newRefreshToken);
-    setAccessTokenCookie(res, newAccessToken);
+    setRefreshTokenCookie(req, res, newRefreshToken);
+    setAccessTokenCookie(req, res, newAccessToken);
 
-    // se il csrf cookie non esiste (edge-case), rigeneralo
     if (!req.cookies?.csrfToken) {
       const csrfToken = crypto.randomBytes(32).toString("hex");
-      setCsrfTokenCookie(res, csrfToken);
+      setCsrfTokenCookie(req, res, csrfToken);
     }
 
     return res.json({ ok: true });
@@ -558,7 +576,9 @@ export async function refresh(req, res) {
   }
 }
 
-// LOGOUT LEGATO AL DISPOSITIVO CON FINGERPRINT --> DA CHIEDERE AL CLIENT IL FINGERPRINT
+/* ---------------------------------------------------
+   LOGOUT
+--------------------------------------------------- */
 export async function logout(req, res) {
   try {
     if (!req.tenant) return res.status(400).json({ message: "Missing tenant" });
@@ -566,9 +586,8 @@ export async function logout(req, res) {
     const refreshToken = req.cookies?.refreshToken;
     if (!refreshToken) return res.status(200).json({ message: "Already logged out" });
 
-    const { fingerprintHash } = req.body; // <-- chiedilo al client
+    const { fingerprintHash } = req.body;
 
-    // validazione
     if (fingerprintHash && fingerprintHash.length > 128) {
       return res.status(400).json({ message: "fingerprintHash troppo lungo" });
     }
@@ -581,7 +600,7 @@ export async function logout(req, res) {
       await userService.revokeRefreshToken(User, refreshToken);
     }
 
-    clearAuthCookies(res);
+    clearAuthCookies(req, res);
 
     return res.json({ message: "Logout successful" });
   } catch (err) {
@@ -626,6 +645,6 @@ export async function me(req, res) {
 
 export async function csrf(req, res) {
   const csrfToken = crypto.randomBytes(32).toString("hex");
-  setCsrfTokenCookie(res, csrfToken);
+  setCsrfTokenCookie(req, res, csrfToken);
   return res.json({ ok: true });
 }

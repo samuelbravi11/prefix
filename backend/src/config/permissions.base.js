@@ -2,26 +2,32 @@
 
 /**
  * Permessi MINIMI per un utente "user_base".
- * Qui ci metti solo ciò che vuoi permettere a chiunque sia "utente normale".
  *
- * Nota:
- * - Non mettere qui permessi "admin".
- * - Mantieni questa lista piccola e intenzionale.
+ * NOTE IMPORTANTI:
+ * - I permessi base sono SEMPRE inclusi in qualsiasi ruolo (anche admin e ruoli custom),
+ *   così l'app rimane utilizzabile.
+ * - La registrazione (tenant/bootstrap/auth/register) NON deve dipendere da permessi RBAC:
+ *   è un flusso pubblico/implicito o protetto da seed_key/token bootstrap.
  */
 export const BASE_PERMISSIONS = [
   // Area riservata / accesso
   "area_riservata:access",
 
+  // Preferenze utente (tema/accent, toggle UI scheduler)
+  "preferences:manage",
+
   // Auth base (utente registrato)
   "auth:login",
+  "auth:logout",
 
-  // Notifiche (lettura)
+  // Notifiche
   "notifications:view",
+  "notifications:manage",
 
   // Dashboard base
   "dashboard:view",
 
-  // Eventi (lettura)
+  // Eventi (calendario interventi)
   "events:view",
 
   // Buildings:
@@ -30,19 +36,18 @@ export const BASE_PERMISSIONS = [
   // - tabella “tutti” necessaria per selezionare un edificio e fare richiesta assegnazione
   "buildings:view_all",
 
-  // Richieste (utente secondario/base)
+  // Richieste (utente base): richiesta assegnazione edificio
   "requests:assign_building:create",
-  // (opzionale, se vuoi che anche user_base possa chiedere un ruolo)
-  // "requests:assign_role:create",
 
-  // Oggetti e regole (lettura)
+  // Oggetti/Asset e regole: lettura
   "assets:view",
   "rules:view",
 
-  // Interventi:
-  // - lettura (tabella/report)
+  // Interventi: lettura tabellare/lista
   "interventions:view",
-  // - creazione e bulk upload (se vuoi che user_base possa inserire interventi)
+
+  // Se vuoi che l’utente base POSSA creare e fare bulk upload, lascia questi.
+  // Se invece vuoi che siano privilegiati, SPOSTALI nei permessi privilegiati e NON qui.
   "interventions:manage",
   "interventions:bulk_upload",
 ];
